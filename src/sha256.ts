@@ -35,9 +35,53 @@ export default class Sha256 extends Circuit {
     const chunk = padded;
 
 
+    // try {
+
+    //   const gamma0x = UInt32.from(86558146);
+
+    //   const r1_0 = Sha256.or(Sha256.shiftL(gamma0x, 25), Sha256.shiftR(gamma0x, 7));
+
+    //   const r1_1 = Sha256.or(Sha256.shiftL(gamma0x, 14), Sha256.shiftR(gamma0x, 18));
+
+    //   const r1_2 = Sha256.shiftR(gamma0x, 3);
+
+
+    //   const gamma0 = Sha256.xor(Sha256.xor(r1_0, r1_1), r1_2);
+    //   // const gamma0 = (((gamma0x << 25) | (gamma0x >>> 7)) ^
+    //   //   ((gamma0x << 14) | (gamma0x >>> 18)) ^
+    //   //   (gamma0x >>> 3));
+
+    //   const gamma1x = UInt32.from(935737620);
+
+    //   const r2_0 = Sha256.or(Sha256.shiftL(gamma1x, 15), Sha256.shiftR(gamma1x, 17));
+
+    //   const r2_1 = Sha256.or(Sha256.shiftL(gamma1x, 13), Sha256.shiftR(gamma1x, 19));
+
+    //   const r2_2 = Sha256.shiftR(gamma1x, 10);
+
+    //   const gamma1 = Sha256.xor(Sha256.xor(r2_0, r2_1), r2_2);
+
+    //   const w16 = UInt32.from(479267501)
+    //   const w7 = UInt32.from(4020831841)
+
+    //   const wi = Sha256.add(Sha256.add(Sha256.add(gamma0, w7), gamma1), w16);
+
+    //   Circuit.asProver(() => {
+    //     console.log('wi', wi.toString());
+    //   })
+
+    // } catch (error) {
+    //   console.log(error)
+    // }
+
+
+
     try {
 
-    const result = Sha256.g(h0, chunk)
+      // const gamma0 = Sha256.xor(UInt32.from(3044724929), UInt32.from(10819768));
+      // gamma0.assertEquals(UInt32.from(3051341945))
+
+      const result = Sha256.g(h0, chunk)
 
     } catch (error) {
       console.error('g error', error)
@@ -112,7 +156,14 @@ export default class Sha256 extends Circuit {
     }
 
 
-    for (let i = 16; i < 48; i++) {
+    for (let i = 16; i < 64; i++) {
+
+
+      // Circuit.asProver(() => {
+      //   console.log('wi', i, W[i - 15].toString(), W[i - 2].toString(), W[i - 16].toString(), W[i - 7].toString());
+      // })
+
+
 
       const gamma0x = W[i - 15];
 
@@ -123,7 +174,26 @@ export default class Sha256 extends Circuit {
       const r1_2 = Sha256.shiftR(gamma0x, 3);
 
 
-      const gamma0 = Sha256.xor(Sha256.xor(r1_0, r1_1), r1_2);
+      const r01 = Sha256.xor(r1_0, r1_1);
+
+
+      if( i == 37) {
+
+        Circuit.asProver(() => {
+          console.log('rrr', r01.toString(), r1_2.toString());
+        })
+        break;
+      }
+
+      const gamma0 = Sha256.xor(r01, r1_2);
+
+
+      if( i == 37) {
+
+
+        break;
+      }
+
       // const gamma0 = (((gamma0x << 25) | (gamma0x >>> 7)) ^
       //   ((gamma0x << 14) | (gamma0x >>> 18)) ^
       //   (gamma0x >>> 3));
@@ -138,26 +208,26 @@ export default class Sha256 extends Circuit {
 
       const gamma1 = Sha256.xor(Sha256.xor(r2_0, r2_1), r2_2);
 
-      W.push((gamma0.add(W[i - 7]).add(gamma1).add(W[i - 16])));
+      const wi = Sha256.add(Sha256.add(Sha256.add(gamma0, W[i - 7]), gamma1), W[i - 16]);
+
+
+      // Circuit.asProver(() => {
+      //   console.log('wi', i, gamma0.toString(), gamma1.toString(), wi.toString());
+      // })
+
+      W.push(wi);
+
 
       // const gamma1 = (((gamma1x << 15) | (gamma1x >>> 17)) ^
       //   ((gamma1x << 13) | (gamma1x >>> 19)) ^
       //   (gamma1x >>> 10));
       //w.push(Field.fromNumber(0))
+
     }
 
 
 
-    // Circuit.asProver(() => {
 
-    //   for (let index = 0; index < 64; index++) {
-    //     if(W[index]) {
-    //       console.log(index, W[index].toString());
-    //     }
-
-    //   }
-
-    // })
 
   }
 
@@ -185,16 +255,25 @@ export default class Sha256 extends Circuit {
   // }
 
 
-  static shiftL(u: UInt32, n: number): UInt32 {
-    let arr = u.value.toBits(32);
-    var times = n > 32 ? n % 32 : n;
-    return UInt32.from(Field.ofBits(arr.splice(times).concat(Array(times).fill(Bool(false)))));
+  static add(a: UInt32, b: UInt32): UInt32 {
+
+    const bits = a.value.add(b.value).toBits().slice(0, 32);
+    return UInt32.from(Field.ofBits(bits));
   }
 
   static shiftR(u: UInt32, n: number): UInt32 {
-    let arr = u.value.toBits();
-    var times = n > 32 ? n % 32 : n;
-    return UInt32.from(Field.ofBits(Array(times).fill(Bool(false)).concat(arr.splice(0, arr.length - times))));
+    const arr = u.value.toBits(32);
+    const times = n > 32 ? 32 : n;
+    const bits = Field.ofBits(arr.splice(times).concat(Array(times).fill(Bool(false))));
+    return UInt32.from(bits);
+  }
+
+
+  static shiftL(u: UInt32, n: number): UInt32 {
+    const arr = u.value.toBits(32);
+    const times = n > 32 ? 32 : n;
+    const bits: Bool[] = Array(times).fill(Bool(false)).concat(arr.splice(0, arr.length - times));
+    return UInt32.from(Field.ofBits(bits));
   }
 
 
