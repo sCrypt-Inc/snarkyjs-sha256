@@ -89,37 +89,6 @@ export default class Sha256 extends Circuit {
 
     console.log('g....')
 
-    //aaa.assertEquals(0)
-
-
-    // nBlocks.assertEquals(UInt32.fromNumber(1));
-
-
-    // preimage.assertEquals(Field.fromNumber(2));
-
-    //const a = Field.ofBits(preimage.toBits());
-    //console.log("aa", preimage.toString())
-    //console.log("aa", preimageSize.toString())
-
-
-    // const b = U32.fromField(preimage);
-
-    // b.val.assertEquals(Field.fromNumber(323232323232));
-
-    // const bits = preimage.toBits(128);
-
-    // bits[0].toField().assertEquals(false)
-    // bits[1].toField().assertEquals(true)
-
-    // for (let index = 2; index < bits.length; index++) {
-    //   bits[index].toField().assertEquals(false)
-    // }
-
-
-    //UInt32.fromNumber(0x428a2f98).assertEquals(UInt32.fromNumber(0x428a2f98));
-
-    //preimage.assertEquals(Field.fromNumber(2));
-
 
   }
 
@@ -156,7 +125,7 @@ export default class Sha256 extends Circuit {
     }
 
 
-    for (let i = 16; i < 64; i++) {
+    for (let i = 16; i < 22; i++) {
 
 
       // Circuit.asProver(() => {
@@ -167,32 +136,21 @@ export default class Sha256 extends Circuit {
 
       const gamma0x = W[i - 15];
 
+
+
       const r1_0 = Sha256.or(Sha256.shiftL(gamma0x, 25), Sha256.shiftR(gamma0x, 7));
+
+
 
       const r1_1 = Sha256.or(Sha256.shiftL(gamma0x, 14), Sha256.shiftR(gamma0x, 18));
 
       const r1_2 = Sha256.shiftR(gamma0x, 3);
 
 
-      const r01 = Sha256.xor(r1_0, r1_1);
+      const gamma0 = Sha256.xor(Sha256.xor(r1_0, r1_1), r1_2);
 
 
-      if( i == 37) {
 
-        Circuit.asProver(() => {
-          console.log('rrr', r01.toString(), r1_2.toString());
-        })
-        break;
-      }
-
-      const gamma0 = Sha256.xor(r01, r1_2);
-
-
-      if( i == 37) {
-
-
-        break;
-      }
 
       // const gamma0 = (((gamma0x << 25) | (gamma0x >>> 7)) ^
       //   ((gamma0x << 14) | (gamma0x >>> 18)) ^
@@ -232,28 +190,6 @@ export default class Sha256 extends Circuit {
   }
 
 
-  // static lShift(u: UInt32, n: number): UInt32 {
-
-
-  //   let fu = u.value;
-  //   for (let index = 0; index < n; index++) {
-  //     fu = fu.mul(2)
-  //   }
-
-  //   return UInt32.from(Field.ofBits(fu.toBits().slice(0, 32)))
-  // }
-
-
-  // static rShift(u: UInt32, n: number): UInt32 {
-
-  //   let fu = u.value;
-  //   for (let index = 0; index < n; index++) {
-  //     fu = fu.div(2)
-  //   }
-
-  //   return UInt32.from(Field.ofBits(fu.toBits().slice(0, 32)))
-  // }
-
 
   static add(a: UInt32, b: UInt32): UInt32 {
 
@@ -262,7 +198,7 @@ export default class Sha256 extends Circuit {
   }
 
   static shiftR(u: UInt32, n: number): UInt32 {
-    const arr = u.value.toBits(32);
+    const arr = u.value.toBits().slice(0, 32);
     const times = n > 32 ? 32 : n;
     const bits = Field.ofBits(arr.splice(times).concat(Array(times).fill(Bool(false))));
     return UInt32.from(bits);
@@ -270,7 +206,7 @@ export default class Sha256 extends Circuit {
 
 
   static shiftL(u: UInt32, n: number): UInt32 {
-    const arr = u.value.toBits(32);
+    const arr = u.value.toBits().slice(0, 32);
     const times = n > 32 ? 32 : n;
     const bits: Bool[] = Array(times).fill(Bool(false)).concat(arr.splice(0, arr.length - times));
     return UInt32.from(Field.ofBits(bits));
@@ -280,16 +216,16 @@ export default class Sha256 extends Circuit {
 
   static or(a: UInt32, b: UInt32): UInt32 {
 
-    let aa = a.value.toBits(32);
-    let bb = b.value.toBits(32);
+    let aa = a.value.toBits().slice(0, 32);
+    let bb = b.value.toBits().slice(0, 32);
 
     return UInt32.from(Field.ofBits(aa.map((a, i) => a.or(bb[i]))))
   }
 
   static and(a: UInt32, b: UInt32): UInt32 {
 
-    let aa = a.value.toBits(32);
-    let bb = b.value.toBits(32);
+    let aa = a.value.toBits().slice(0, 32);
+    let bb = b.value.toBits().slice(0, 32);
 
     return UInt32.from(Field.ofBits(aa.map((a, i) => a.and(bb[i]))))
   }
@@ -299,9 +235,33 @@ export default class Sha256 extends Circuit {
     return UInt32.from(Field.ofBits(aa.map(a => a.not())))
   }
 
-  static xor(a: UInt32, b: UInt32): UInt32 {
+  static xor(a: UInt32, b: UInt32, i: number = -1): UInt32 {
 
-    return Sha256.and(Sha256.or(a, b), Sha256.or(Sha256.not(a), Sha256.not(b)))
+
+    let aa = a.value.toBits().slice(0, 32);
+
+    if (i >= 21) {
+      return UInt32.from(1);
+    }
+
+    let bb = b.value.toBits().slice(0, 32);
+
+
+    if (i >= 21) {
+      return UInt32.from(1);
+    }
+
+
+    const ab = UInt32.from(Field.ofBits(aa.map((a, i) => a.or(bb[i]))))
+
+
+    const nota = Sha256.not(a);
+
+    const notb = Sha256.not(b);
+
+    const notab = Sha256.or(nota, notb);
+
+    return Sha256.and(ab, notab);
   }
 
 }
