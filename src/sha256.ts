@@ -125,7 +125,7 @@ export default class Sha256 extends Circuit {
     }
 
 
-    for (let i = 16; i < 22; i++) {
+    for (let i = 16; i < 23; i++) {
 
 
       // Circuit.asProver(() => {
@@ -147,7 +147,7 @@ export default class Sha256 extends Circuit {
       const r1_2 = Sha256.shiftR(gamma0x, 3);
 
 
-      const gamma0 = Sha256.xor(Sha256.xor(r1_0, r1_1), r1_2);
+      const gamma0 = Sha256.xor(Sha256.xor(r1_0, r1_1, i), r1_2, i);
 
 
 
@@ -164,14 +164,14 @@ export default class Sha256 extends Circuit {
 
       const r2_2 = Sha256.shiftR(gamma1x, 10);
 
-      const gamma1 = Sha256.xor(Sha256.xor(r2_0, r2_1), r2_2);
+      const gamma1 = Sha256.xor(Sha256.xor(r2_0, r2_1, i), r2_2, i);
 
       const wi = Sha256.add(Sha256.add(Sha256.add(gamma0, W[i - 7]), gamma1), W[i - 16]);
 
 
-      // Circuit.asProver(() => {
-      //   console.log('wi', i, gamma0.toString(), gamma1.toString(), wi.toString());
-      // })
+      Circuit.asProver(() => {
+        console.log('wi', i, gamma0.toString(), gamma1.toString(), wi.toString());
+      })
 
       W.push(wi);
 
@@ -240,20 +240,10 @@ export default class Sha256 extends Circuit {
 
     let aa = a.value.toBits().slice(0, 32);
 
-    if (i >= 21) {
-      return UInt32.from(1);
-    }
-
     let bb = b.value.toBits().slice(0, 32);
 
 
-    if (i >= 21) {
-      return UInt32.from(1);
-    }
-
-
     const ab = UInt32.from(Field.ofBits(aa.map((a, i) => a.or(bb[i]))))
-
 
     const nota = Sha256.not(a);
 
@@ -261,7 +251,23 @@ export default class Sha256 extends Circuit {
 
     const notab = Sha256.or(nota, notb);
 
-    return Sha256.and(ab, notab);
+    if (i >= 22) {
+      console.log('i..', i)
+      return UInt32.from(1);
+    }
+
+    let ab_u32 = ab.value.toBits().slice(0, 32);
+
+    if (i >= 22) {
+      console.log('i..', i)
+      return UInt32.from(1);
+    }
+
+    let notab_u32 = notab.value.toBits().slice(0, 32);
+
+    const r = UInt32.from(Field.ofBits(ab_u32.map((a, i) => a.and(notab_u32[i]))))
+
+    return r;
   }
 
 }
