@@ -251,10 +251,10 @@ export default class Sha256 extends Circuit {
 
     const notab = Sha256.or(nota, notb);
 
-    if (i >= 22) {
-      console.log('i..', i)
-      return UInt32.from(1);
-    }
+    // if (i >= 22) {
+    //   console.log('i..', i)
+    //   return UInt32.from(1);
+    // }
 
     let ab_u32 = ab.value.toBits().slice(0, 32);
 
