@@ -63,9 +63,35 @@ export default class Sha256 extends Circuit {
 
       // /a.assertEquals(UInt32.fromNumber(0));
 
-      const l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 30)
+      let l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 30)
 
-      const l2 = Sha256.shiftL(UInt32.fromNumber(1), 30)
+      l1.assertEquals(UInt32.from(3))
+
+      l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 32)
+
+      l1.assertEquals(UInt32.from(0))
+
+      l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 31)
+
+      l1.assertEquals(UInt32.from(1))
+
+      l1 = Sha256.shiftR(UInt32.fromNumber(4), 1)
+
+      l1.assertEquals(UInt32.from(2))
+
+      let l2 = Sha256.shiftL(UInt32.fromNumber(1), 30)
+
+      l2.assertEquals(UInt32.from(1073741824))
+
+      l2 = Sha256.shiftL(UInt32.fromNumber(2), 4)
+
+      l2.assertEquals(UInt32.from(32))
+
+
+      l2 = Sha256.shiftL(UInt32.fromNumber(2), 32)
+
+      l2.assertEquals(UInt32.from(0))
+
 
 
       Circuit.asProver(() => {
@@ -251,9 +277,9 @@ export default class Sha256 extends Circuit {
     // 001
     // 010
     for (let i = 0; i < 32; i++) {
-      //const item = i < 32 - n ? arr[i+n] :  Bool(false)
+      const item = i < 32 - n ? arr[i+n] :  Bool(false)
       //const item = Bool(false)
-      r[i] = Circuit.if(i < 32 - n, arr[i], Bool(false))
+      r[i] = Circuit.if(i < 32 - n, item, Bool(false))
     }
 
     return UInt32.from(Field.ofBits(r));
@@ -272,9 +298,9 @@ export default class Sha256 extends Circuit {
 
 
     for (let i = 0; i < 32; i++) {
-      //const item = i>= n ? arr[i] :  Bool(false)
+      const item = i>= n ? arr[i - n] :  Bool(false)
       //const item =  Bool(false)
-      r[i] = Circuit.if(i < n, Bool(false), arr[i])
+      r[i] = Circuit.if(i < n, Bool(false), item)
     }
 
     return UInt32.from(Field.ofBits(r));
@@ -341,13 +367,13 @@ async function main() {
     ].map(i => UInt32.from(i)));
 
 
-  // const preimageSize = UInt32.fromNumber(128);
-  // // const hash = Poseidon.hash([preimage]);
-  // // console.log(hash.toString())
-  // const pi = Sha256.prove([preimage, preimageSize], [Field.fromNumber(4)], kp);
-  // console.log('proof', pi);
-  // const success = Sha256.verify([Field.fromNumber(4)], kp.verificationKey(), pi)
-  // console.log('verify', success);
+  const preimageSize = UInt32.fromNumber(128);
+  // const hash = Poseidon.hash([preimage]);
+  // console.log(hash.toString())
+  const pi = Sha256.prove([preimage, preimageSize], [Field.fromNumber(4)], kp);
+  console.log('proof', pi);
+  const success = Sha256.verify([Field.fromNumber(4)], kp.verificationKey(), pi)
+  console.log('verify', success);
 
   await shutdown();
 }
