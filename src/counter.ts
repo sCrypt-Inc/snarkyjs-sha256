@@ -6,6 +6,7 @@ import {
     circuitMain,
     public_,
     isReady,
+    CircuitString
   } from 'snarkyjs';
   
   /* Exercise 1:
@@ -16,12 +17,20 @@ import {
   
   class Counter extends Circuit {
     @circuitMain
-    static increase( counter: Field, @public_ newCounter: Field) {
+    static increase( counter: CircuitString, @public_ newCounter: Field) {
 
 
-        const a = counter.add(1);
+        let acc = counter.append(CircuitString.fromString("aaaaa"));
 
-        a.assertEquals(newCounter)
+
+         
+        for (let i = 0; i < 1; i++) {
+          
+          acc = acc.append(CircuitString.fromString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+          
+        }
+
+        //a.assertEquals(newCounter)
 
     }
   }
@@ -31,16 +40,22 @@ import {
 
     await isReady
 
-    const kp = Counter.generateKeypair();
-  
-    const counter = Field.fromNumber(1);
-    const newCounter = Field.fromNumber(2);
-  
-    const pi = Counter.prove([counter], [newCounter], kp);
-    console.log('proof', pi);
 
-    const success = Counter.verify([newCounter], kp.verificationKey(), pi)
-    console.log('verify', success);
+    console.log('main...')
+
+
+    const kp = Counter.generateKeypair();
+
+    console.log('generateKeypair ok' )
+  
+    // const counter = CircuitString.fromString("aaaaa");
+    // const newCounter = Field.fromNumber(2);
+  
+    // const pi = Counter.prove([counter], [newCounter], kp);
+    // console.log('proof', pi);
+
+    // const success = Counter.verify([newCounter], kp.verificationKey(), pi)
+    // console.log('verify', success);
   }
 
 
