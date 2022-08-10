@@ -140,9 +140,14 @@ class Word extends CircuitValue {
     const a_ = Field.ofBits(a.value)
     const b_ = Field.ofBits(b.value)
     const sum = a_.add(b_)
-    const ret = new Word(sum.toBits().slice(0, 32))
+    const ret = new Word(sum.toBits(33).slice(0, 32))
     return ret;
   }
+
+  // static right_rotate(n: Word, d: Field) : Word  {
+  //   //(n >> d) | (n << (32 - d))
+  //   return Word.or(Word.shiftR(n, d), Word.shiftL(n,  Field.fromNumber(32).sub(d)));
+  // }
 
   static check(c: Word) {
 
@@ -407,7 +412,7 @@ export default class Sha256 extends Circuit {
       acc = acc.add(Field.ofBits(a[i].value));
     }
 
-    return new Word(acc.toBits().slice(0, 32));
+    return new Word(acc.toBits(35).slice(0, 32));
   }
 
   static mod_add_5(a: Word[]): Word {
@@ -417,7 +422,7 @@ export default class Sha256 extends Circuit {
       acc = acc.add(Field.ofBits(a[i].value));
     }
 
-    return new Word(acc.toBits().slice(0, 32));
+    return new Word(acc.toBits(35).slice(0, 32));
   }
 
 }
@@ -430,7 +435,7 @@ async function main() {
   await isReady
   const kp = Sha256.generateKeypair();
 
-
+  console.log('generateKeypair ......')
   const preimage = new Preimage([Word.fromNumber(2147483648),
   Word.fromNumber(0),
   Word.fromNumber(0),
