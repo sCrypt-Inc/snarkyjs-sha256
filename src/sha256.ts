@@ -130,7 +130,7 @@ class Word extends CircuitValue {
     let r: Bool[] = [];
 
     for (let i = 0; i < 32; i++) {
-      r.push(Circuit.if(a_[i].equals(b_[i]), Bool(false), Bool(true)));
+      r.push(a_[i].equals(b_[i]).not());
     }
 
     return new Word(r)
@@ -363,12 +363,12 @@ export default class Sha256 extends Circuit {
       w56, w57, w58, w59, w60, w61, w62, w63
     ];
 
-    //   Circuit.asProver(() => {
+      // Circuit.asProver(() => {
 
-    //     for (let i = 0; i < w.length; i++) {
-    //       console.log('wi', i, w[i].toNumString());
-    //     }
-    //   })
+      //   for (let i = 0; i < w.length; i++) {
+      //     console.log('wi', i, w[i].toNumString());
+      //   }
+      // })
 
     // const w = [
     //   Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0),
