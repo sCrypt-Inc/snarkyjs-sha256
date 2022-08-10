@@ -10,27 +10,148 @@ import {
   shutdown,
   arrayProp,
   CircuitValue,
-  Poseidon
+  Poseidon,
+  Character
 } from 'snarkyjs';
 
 let { toBytes, fromBytes, toString } = Encoding.Bijective.Fp;
 
 
-class Optional<T> {
-  isSome: Bool;
-  value: T;
 
-  constructor(isSome: Bool, value: T) {
-    this.isSome = isSome;
+const N = 32
+class Word extends CircuitValue {
+  @arrayProp(Bool, N) value: Bool[];
+
+  constructor(value: Bool[]) {
+    super();
     this.value = value;
+  }
+
+  // little endian
+  toString(): string {
+    return this.value.map((b) => b.toBoolean() ? '1' : '0').reverse().join('')
+  }
+
+  static fromNumber(n: number): Word {
+    return new Word(Field.fromNumber(n).toBits(N))
+  }
+
+  static shiftR(w: Word, n: Field): Word {
+    const arr = w.value;
+
+    let r: Bool[] = Word.fromNumber(0).value;
+
+    // 001
+    // 010
+    for (let i = 0; i < 32; i++) {
+      for (let j = 0; j < 32; j++) {
+        const toUpdate = Field(j - i).equals(n)
+        // little endian
+        r[i] = Circuit.if(toUpdate, arr[j], r[i])
+      }
+    }
+
+    const ret = new Word(r);
+
+    return ret
+  }
+
+
+  static shiftL(w: Word, n: Field): Word {
+    const arr = w.value;
+
+    let r: Bool[] = Word.fromNumber(0).value;
+
+    // 010
+    // 001
+    for (let i = 0; i < 32; i++) {
+      for (let j = 0; j < 32; j++) {
+        const toUpdate = Field(j - i).equals(n)
+        // little endian
+        r[j] = Circuit.if(toUpdate, arr[i], r[j])
+      }
+    }
+
+    const ret = new Word(r)
+
+    return ret
+  }
+
+
+  static and(a: Word, b: Word): Word {
+    const a_ = a.value;
+    const b_ = b.value;
+    let r: Bool[] = [];
+
+
+    for (let i = 0; i < 32; i++) {
+      r.push(a_[i].and(b_[i]));
+    }
+
+    const ret = new Word(r)
+
+    return ret
+  }
+
+  static not(w: Word): Word {
+    const a_ = w.value;
+
+    let r: Bool[] = [];
+
+    for (let i = 0; i < 32; i++) {
+      r.push(a_[i].not());
+    }
+
+    const ret = new Word(r)
+
+    return ret
+  }
+
+
+  static or(a: Word, b: Word): Word {
+    const a_ = a.value;
+    const b_ = b.value;
+    let r: Bool[] = [];
+
+
+    for (let i = 0; i < 32; i++) {
+      r.push(a_[i].or(b_[i]));
+    }
+
+    const ret = new Word(r)
+    return ret
+  }
+
+
+  static xor(a: Word, b: Word): Word {
+    const a_ = a.value;
+    const b_ = b.value;
+    let r: Bool[] = [];
+
+    for (let i = 0; i < 32; i++) {
+      r.push(Circuit.if(a_[i].equals(b_[i]), Bool(false), Bool(true)));
+    }
+
+    return new Word(r)
+  }
+
+  static add(a: Word, b: Word): Word {
+    const a_ = Field.ofBits(a.value)
+    const b_ = Field.ofBits(b.value)
+    const sum = a_.add(b_)
+    const ret = new Word(sum.toBits().slice(0, 32))
+    return ret
+  }
+
+  static check(c: Word) {
+
   }
 }
 
-
 export class Preimage extends CircuitValue {
-  @arrayProp(UInt32, 16) value: UInt32[];
+  @arrayProp(Word, 16) value: Word[];
 
-  constructor(value: UInt32[]) {
+  constructor(value: Word[]) {
     super();
     this.value = value;
   }
@@ -41,9 +162,9 @@ export class Preimage extends CircuitValue {
   // }
 
 
-  hash() {
-    return Poseidon.hash(this.value.map(v => v.value));
-  }
+  // hash() {
+  //   return Poseidon.hash(this.value.map(v => v.to));
+  // }
 
 }
 
@@ -57,56 +178,11 @@ export default class Sha256 extends Circuit {
 
     try {
 
-      //Sha256.mod_add(UInt32.from(0), Sha256.s0(UInt32.from(0)), UInt32.from(128), Sha256.s1(UInt32.from(2717911040)));
+      const h0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19].map(n => Word.fromNumber(n));
 
-      //const a = Sha256.not(UInt32.fromNumber(1))
+      let hi = h0;
 
-      // /a.assertEquals(UInt32.fromNumber(0));
-
-      let l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 30)
-
-      l1.assertEquals(UInt32.from(3))
-
-      l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 32)
-
-      l1.assertEquals(UInt32.from(0))
-
-      l1 = Sha256.shiftR(UInt32.fromNumber(4294967295), 31)
-
-      l1.assertEquals(UInt32.from(1))
-
-      l1 = Sha256.shiftR(UInt32.fromNumber(4), 1)
-
-      l1.assertEquals(UInt32.from(2))
-
-      let l2 = Sha256.shiftL(UInt32.fromNumber(1), 30)
-
-      l2.assertEquals(UInt32.from(1073741824))
-
-      l2 = Sha256.shiftL(UInt32.fromNumber(2), 4)
-
-      l2.assertEquals(UInt32.from(32))
-
-
-      l2 = Sha256.shiftL(UInt32.fromNumber(2), 32)
-
-      l2.assertEquals(UInt32.from(0))
-
-
-
-      Circuit.asProver(() => {
-        console.log('l1', l1.toString())
-        console.log('l2', l2.toString())
-      })
-
-      const result = Sha256.g(UInt32.fromNumber(0x6a09e667),
-        UInt32.fromNumber(0xbb67ae85),
-        UInt32.fromNumber(0x3c6ef372),
-        UInt32.fromNumber(0xa54ff53a),
-        UInt32.fromNumber(0x510e527f),
-        UInt32.fromNumber(0x9b05688c),
-        UInt32.fromNumber(0x1f83d9ab),
-        UInt32.fromNumber(0x5be0cd19), preimage.value)
+      const result = Sha256.g(hi, preimage.value)
 
     } catch (error) {
       console.error('g error', error)
@@ -119,11 +195,18 @@ export default class Sha256 extends Circuit {
 
 
 
-  static g(h0: UInt32, h1: UInt32, h2: UInt32, h3: UInt32, h4: UInt32, h5: UInt32, h6: UInt32, h7: UInt32, chuck: UInt32[]) {
+  static g(hprev: Word[], chuck: Word[]) {
 
     console.log('chuck', chuck.length)
 
-
+    let a = hprev[0];
+    let b = hprev[1];
+    let c = hprev[2];
+    let d = hprev[3];
+    let e = hprev[4];
+    let f = hprev[5];
+    let g = hprev[6];
+    let h = hprev[7];
 
     const k = [
       0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -133,7 +216,7 @@ export default class Sha256 extends Circuit {
       0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
       0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
       0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2].map(n => UInt32.fromNumber(n));
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2].map(n => Word.fromNumber(n));
 
     const w00 = chuck[0];
     const w01 = chuck[1];
@@ -152,26 +235,6 @@ export default class Sha256 extends Circuit {
     const w14 = chuck[14];
     const w15 = chuck[15];
     const w16 = Sha256.mod_add(w00, Sha256.s0(w01), w09, Sha256.s1(w14));
-    // const a = Sha256.s0(w02);
-
-    // const tmp1 = Sha256.shiftL(w15, 15);
-
-    // const tmp2 = Sha256.shiftR(w15, 17);
-
-    // Circuit.asProver(() => {
-    //   console.log('w15', w15.toString())
-    //   console.log('tmp1', tmp1.toString())
-    //   console.log('tmp2', tmp2.toString())
-    // })
-
-
-  //   const r2_0 = Sha256.or(tmp1, tmp2);
-  //   //const r2_1 = Sha256.or(Sha256.shiftL(w15, 13), Sha256.shiftR(w15, 19));
-  //   //const r2_2 = Sha256.shiftR(w15, 10);
-  //   //return Sha256.xor(Sha256.xor(r2_0, r2_1), r2_2);
-
-  // //const b = Sha256.s1(w15);
-    
     const w17 = Sha256.mod_add(w01, Sha256.s0(w02), w10, Sha256.s1(w15));
     const w18 = Sha256.mod_add(w02, Sha256.s0(w03), w11, Sha256.s1(w16));
     const w19 = Sha256.mod_add(w03, Sha256.s0(w04), w12, Sha256.s1(w17));
@@ -220,119 +283,82 @@ export default class Sha256 extends Circuit {
     const w62 = Sha256.mod_add(w46, Sha256.s0(w47), w55, Sha256.s1(w60));
     const w63 = Sha256.mod_add(w47, Sha256.s0(w48), w56, Sha256.s1(w61));
 
+    const w = [
+      w00, w01, w02, w03, w04, w05, w06, w07,
+      w08, w09, w10, w11, w12, w13, w14, w15,
+      w16, w17, w18, w19, w20, w21, w22, w23,
+      w24, w25, w26, w27, w28, w29, w30, w31,
+      w32, w33, w34, w35, w36, w37, w38, w39,
+      w40, w41, w42, w43, w44, w45, w46, w47,
+      w48, w49, w50, w51, w52, w53, w54, w55,
+      w56, w57, w58, w59, w60, w61, w62, w63
+    ];
 
 
-    Circuit.asProver(() => {
-      const w = [
-        w00, w01, w02, w03, w04, w05, w06, w07,
-        w08, w09, w10, w11, w12, w13, w14, w15,w16
-        // w16, w17, w18, w19, w20, w21, w22, w23,
-        // w24, w25, w26, w27, w28, w29, w30, w31,
-        // w32, w33, w34, w35, w36, w37, w38, w39,
-        // w40, w41, w42, w43, w44, w45, w46, w47,
-        // w48, w49, w50, w51, w52, w53, w54, w55,
-        // w56, w57, w58, w59, w60, w61, w62, w63
-      ];
+    for (let i = 0; i < 64; i++) {
+      // const ch = ((e & f) ^ (~e & g));
+      const ch = Word.xor(Word.and(e, f), (Word.and(Word.not(e), g)));
+      //const maj = ((a & b) ^ (a & c) ^ (b & c));
+      const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
+      //const sigma0 = ((a << 30) | (a >>> 2)) ^ ((a << 19) | (a >>> 13)) ^ ((a << 10) | (a >>> 22));
+      const sigma0 = Word.xor(
+        Word.xor(
+          Word.or(Word.shiftL(a, Field(30)), Word.shiftR(a, Field(2))),
+          Word.or(Word.shiftL(a, Field(19)), Word.shiftR(a, Field(13)))),
+        Word.or(Word.shiftL(a, Field(10)), Word.shiftR(a, Field(22))));
 
-      for (let i = 0; i < w.length; i++) {
-        console.log('wi', i, w[i].toString());
-      }
+      // const sigma1 = ((e << 26) | (e >>> 6)) ^ ((e << 21) | (e >>> 11)) ^ ((e << 7) | (e >>> 25));
+      const sigma1 = Word.xor(
+        Word.xor(
+          Word.or(Word.shiftL(e, Field(26)), Word.shiftR(e, Field(6))),
+          Word.or(Word.shiftL(e, Field(21)), Word.shiftR(e, Field(11)))),
+        Word.or(Word.shiftL(e, Field(7)), Word.shiftR(e, Field(25))));
 
-    })
+      // const t1 = (h + sigma1 + ch + K[i] + W[i]);
+      const t1 = Word.add(Word.add(Word.add(Word.add(h, sigma1), ch), k[i]), w[i]);
+
+      // const t2 = (sigma0 + maj);
+      const t2 = Word.add(sigma0, maj);
+
+      h = g;
+      g = f;
+      f = e;
+      e = Word.add(d,t1);
+      d = c;
+      c = b;
+      b = a;
+      a = Word.add(t1, t2);
+    }
+
+
+
+
+
     console.log('g end.')
 
   }
 
 
-  static s0(w: UInt32): UInt32 {
-    const r1_0 = Sha256.or(Sha256.shiftL(w, 25), Sha256.shiftR(w, 7));
-    const r1_1 = Sha256.or(Sha256.shiftL(w, 14), Sha256.shiftR(w, 18));
-    const r1_2 = Sha256.shiftR(w, 3);
-    return Sha256.xor(Sha256.xor(r1_0, r1_1), r1_2);
+  static s0(w: Word): Word {
+    const r1_0 = Word.or(Word.shiftL(w, Field(25)), Word.shiftR(w, Field(7)));
+    const r1_1 = Word.or(Word.shiftL(w, Field(14)), Word.shiftR(w, Field(18)));
+    const r1_2 = Word.shiftR(w, Field(3));
+    return Word.xor(Word.xor(r1_0, r1_1), r1_2);
   }
 
-  static s1(w: UInt32): UInt32 {
-    const r2_0 = Sha256.or(Sha256.shiftL(w, 15), Sha256.shiftR(w, 17));
-    const r2_1 = Sha256.or(Sha256.shiftL(w, 13), Sha256.shiftR(w, 19));
-    const r2_2 = Sha256.shiftR(w, 10);
-    return Sha256.xor(Sha256.xor(r2_0, r2_1), r2_2);
+  static s1(w: Word): Word {
+    const r2_0 = Word.or(Word.shiftL(w, Field(15)), Word.shiftR(w, Field(17)));
+    const r2_1 = Word.or(Word.shiftL(w, Field(13)), Word.shiftR(w, Field(19)));
+    const r2_2 = Word.shiftR(w, Field(10));
+    return Word.xor(Word.xor(r2_0, r2_1), r2_2);
   }
 
-  static mod_add(gamma0: UInt32, wa: UInt32, gamma1: UInt32, wb: UInt32): UInt32 {
-    return Sha256.add(Sha256.add(Sha256.add(gamma0, wa), gamma1), wb);
-  }
-
-
-
-  static add(a: UInt32, b: UInt32): UInt32 {
-    const bits = a.value.add(b.value).toBits(32);
-    return UInt32.from(Field.ofBits(bits));
-  }
-
-  static shiftR(u: UInt32, n: number): UInt32 {
-    const arr = u.value.toBits(32);
-
-    let r : Bool[] = Field.fromNumber(0).toBits(32);
-
-    // 001
-    // 010
-    for (let i = 0; i < 32; i++) {
-      const item = i < 32 - n ? arr[i+n] :  Bool(false)
-      //const item = Bool(false)
-      r[i] = Circuit.if(i < 32 - n, item, Bool(false))
-    }
-
-    return UInt32.from(Field.ofBits(r));
-  }
-
-
-  static shiftL(u: UInt32, n: number): UInt32 {
-    // const arr = u.value.toBits(32);
-    // const times = n > 32 ? 32 : n;
-    // const bits: Bool[] = Array(times).fill(Bool(false)).concat(arr.splice(0, arr.length - times));
-
-
-    const arr = u.value.toBits(32);
-
-    let r : Bool[] = Field.fromNumber(0).toBits(32);
-
-
-    for (let i = 0; i < 32; i++) {
-      const item = i>= n ? arr[i - n] :  Bool(false)
-      //const item =  Bool(false)
-      r[i] = Circuit.if(i < n, Bool(false), item)
-    }
-
-    return UInt32.from(Field.ofBits(r));
+  static mod_add(gamma0: Word, wa: Word, gamma1: Word, wb: Word): Word {
+    return Word.add(Word.add(Word.add(gamma0, wa), gamma1), wb);
   }
 
 
 
-  static or(a: UInt32, b: UInt32): UInt32 {
-
-    let aa = a.value.toBits(32);
-    let bb = b.value.toBits(32);
-
-    return UInt32.from(Field.ofBits(aa.map((a, i) => a.or(bb[i]))))
-  }
-
-  static and(a: UInt32, b: UInt32): UInt32 {
-
-    let aa = a.value.toBits(32);
-    let bb = b.value.toBits(32);
-
-    return UInt32.from(Field.ofBits(aa.map((a, i) => a.and(bb[i]))))
-  }
-
-  static xor(a: UInt32, b: UInt32, i: number = -1): UInt32 {
-
-    let aa = a.value.toBits(32);
-    let bb = b.value.toBits(32);
-
-    return UInt32.from(Field.ofBits(aa.map((itema, i) => {
-      return Circuit.if(itema.equals(bb[i]), Bool(false), Bool(true))
-    })))
-  }
 
 }
 
@@ -348,32 +374,31 @@ async function main() {
 
 
 
-  const preimage = new Preimage([Field.fromNumber(2147483648),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(2147483648),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(0),
-    Field.fromNumber(128),
-    ].map(i => UInt32.from(i)));
+  const preimage = new Preimage([Word.fromNumber(2147483648),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(2147483648),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(0),
+  Word.fromNumber(128)])
 
 
-  const preimageSize = UInt32.fromNumber(128);
-  // const hash = Poseidon.hash([preimage]);
-  // console.log(hash.toString())
-  const pi = Sha256.prove([preimage, preimageSize], [Field.fromNumber(4)], kp);
-  console.log('proof', pi);
-  const success = Sha256.verify([Field.fromNumber(4)], kp.verificationKey(), pi)
-  console.log('verify', success);
+  // const preimageSize = UInt32.fromNumber(128);
+  // // const hash = Poseidon.hash([preimage]);
+  // // console.log(hash.toString())
+  // const pi = Sha256.prove([preimage, preimageSize], [Field.fromNumber(4)], kp);
+  // console.log('proof', pi);
+  // const success = Sha256.verify([Field.fromNumber(4)], kp.verificationKey(), pi)
+  // console.log('verify', success);
 
   await shutdown();
 }
