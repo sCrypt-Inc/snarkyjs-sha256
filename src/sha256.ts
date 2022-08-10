@@ -412,7 +412,7 @@ export default class Sha256 extends Circuit {
       acc = acc.add(Field.ofBits(a[i].value));
     }
 
-    return new Word(acc.toBits(35).slice(0, 32));
+    return new Word(acc.toBits(34).slice(0, 32));
   }
 
   static mod_add_5(a: Word[]): Word {
