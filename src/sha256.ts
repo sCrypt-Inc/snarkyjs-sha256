@@ -142,9 +142,21 @@ class Word extends CircuitValue {
     return ret;
   }
 
-  static right_rotate(n: Word, d: Field) : Word  {
-    //(n >> d) | (n << (32 - d))
-    return Word.or(Word.shiftR(n, d), Word.shiftL(n,  Field.fromNumber(32).sub(d)));
+
+  static right_rotate(x: Word, n: number): Word {
+
+    let bits: Bool[] = [];
+
+    for (let i = 0; i < 32; i++) {
+      let idx = n + i;
+      if (idx > 31) {
+        idx = idx - 32;
+      }
+
+      bits.push(x.value[idx]);
+    }
+
+    return new Word(bits);
   }
 
   static check(c: Word) {
@@ -282,13 +294,13 @@ export default class Sha256 extends Circuit {
 
     for (let i = 0; i < 64; i++) {
       //S1 := rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)
-      const sigma1 = Word.xor(Word.xor(Word.right_rotate(e, Field(6)), Word.right_rotate(e, Field(11))), Word.right_rotate(e, Field(25)));
+      const sigma1 = Word.xor(Word.xor(Word.right_rotate(e, 6), Word.right_rotate(e, 11)), Word.right_rotate(e, 25));
       //ch := (e & f) ^ ((^e) & g)
       const ch = Word.xor(Word.and(e, f), Word.and(Word.not(e), g));
       //temp1 := h + S1 + ch + k[i] + w[i]
       const t1 = Sha256.mod_add_5([h, sigma1, ch, k[i], w[i]]);
       //S0 := rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)
-      const sigma0 = Word.xor(Word.xor(Word.right_rotate(a, Field(2)), Word.right_rotate(a, Field(13))), Word.right_rotate(a, Field(22)));
+      const sigma0 = Word.xor(Word.xor(Word.right_rotate(a, 2), Word.right_rotate(a, 13)), Word.right_rotate(a, 22));
       //maj := (a & b) ^ (a & c) ^ (b & c)
       const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
       //temp2 := S0 + maj
@@ -425,7 +437,7 @@ export default class Sha256 extends Circuit {
     // return Word.xor(Word.xor(r1_0, r1_1), r1_2);
     //		s0 := rightRotate(w[i-15], 7) ^ rightRotate(w[i-15], 18) ^ (w[i-15] >> 3)
 
-    return Word.xor(Word.xor(Word.right_rotate(w, Field(7)), Word.right_rotate(w, Field(18))), Word.shiftR(w, Field(3)));
+    return Word.xor(Word.xor(Word.right_rotate(w, 7), Word.right_rotate(w, 18)), Word.shiftR(w, Field(3)));
   }
 
   static s1(w: Word): Word {
@@ -434,7 +446,7 @@ export default class Sha256 extends Circuit {
     // const r2_2 = Word.shiftR(w, Field(10));
     // return Word.xor(Word.xor(r2_0, r2_1), r2_2);
     //s1 := rightRotate(w[i-2], 17) ^ rightRotate(w[i-2], 19) ^ (w[i-2] >> 10)
-    return Word.xor(Word.xor(Word.right_rotate(w, Field(17)), Word.right_rotate(w, Field(19))), Word.shiftR(w, Field(10)));
+    return Word.xor(Word.xor(Word.right_rotate(w, 17), Word.right_rotate(w, 19)), Word.shiftR(w, Field(10)));
   }
 
   static mod_add_4(a: Word[]): Word {
