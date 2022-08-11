@@ -8,6 +8,9 @@ import {
   shutdown,
   arrayProp,
   CircuitValue,
+  ZkProgram,
+  SelfProof,
+  verify
 } from 'snarkyjs';
 
 import { createHash } from 'crypto'
@@ -180,6 +183,16 @@ export class Preimage extends CircuitValue {
     this.value = value;
   }
 
+  // static fromBuffer(buffer: Buffer) {
+
+  //   let r: Bool[] = [];
+  //   for (let i = 0; i < 32; i++) {
+  //     r.push(...Field.fromNumber(buffer[i]).toBits(8).reverse());
+  //   }
+
+  //   return new Hash(r);
+  // }
+
   static fromWords(hash: Word[]): Preimage {
 
     let w: Word[] = [];
@@ -253,40 +266,36 @@ export class Hash extends CircuitValue {
 export default class Sha256 extends Circuit {
   @circuitMain
   static main(preimage: Preimage, @public_ hash: Hash) {
-
-    console.log('main...')
-
+    hash.assertEquals(Sha256.sha256(preimage));
+  }
+  static sha256Impl(preimage: Preimage): Word[] {
+    console.log('sha256Impl...')
     const h0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19].map(n => Word.fromNumber(n));
+    return Sha256.g(h0, preimage.value)
+  }
 
-    //const h = Sha256.g(h0, preimage.value)
-    const h = [
-      Word.fromNumber(1014624693),
-      Word.fromNumber(3389675815),
-      Word.fromNumber(1554101027),
-      Word.fromNumber(1870771540),
-      Word.fromNumber(2111610364),
-      Word.fromNumber(2795639350),
-      Word.fromNumber(3630102064),
-      Word.fromNumber(1621806255),
-    ]
-    // Circuit.asProver(() => {
-    //   for (let i = 0; i < 8; i++) {
-    //     console.log('ih', i , h[i].toNumString())
-    //   }
-    // })
+  static sha256(preimage: Preimage) {
+    console.log('sha256...')
+    const h = Sha256.sha256Impl(preimage);
+    return Hash.fromWords(h)
+  }
 
+  static hash256(preimage: Preimage) {
+    console.log('hash256...')
+    const hash = Sha256.sha256Impl(preimage);
 
-    const dhashPreimage = Preimage.fromWords(h);
+    // const h = [
+    //   Word.fromNumber(1014624693),
+    //   Word.fromNumber(3389675815),
+    //   Word.fromNumber(1554101027),
+    //   Word.fromNumber(1870771540),
+    //   Word.fromNumber(2111610364),
+    //   Word.fromNumber(2795639350),
+    //   Word.fromNumber(3630102064),
+    //   Word.fromNumber(1621806255),
+    // ]
 
-    const doublehash = Sha256.g(h0, dhashPreimage.value)
-
-    // Circuit.asProver(() => {
-
-    //   console.log("doublehash", Hash.fromWords(doublehash).toString())
-    // })
-
-    hash.assertEquals(Hash.fromWords(doublehash));
-
+    return Hash.fromWords(Sha256.sha256Impl(Preimage.fromWords(hash)))
   }
 
   static compression(hprev: Word[], w: Word[]) {
@@ -483,9 +492,7 @@ export default class Sha256 extends Circuit {
 
 async function main() {
 
-  await isReady
-
-  console.log('generateKeypair ......1111')
+  console.log('main ......')
   const preimage = new Preimage([Word.fromNumber(2147483648),
   Word.fromNumber(0),
   Word.fromNumber(0),
@@ -504,7 +511,7 @@ async function main() {
   Word.fromNumber(128)])
 
 
-  const hashbuf = Buffer.from(hash256("80000000000000000000000000000000"), 'hex');
+  const hashbuf = Buffer.from(sha256("80000000000000000000000000000000"), 'hex');
 
   console.log(hashbuf.toString('hex'))
   const hash = Hash.fromBuffer(hashbuf)
@@ -530,8 +537,110 @@ async function main() {
 }
 
 
+async function recursion_main() {
+
+  console.log('recursion_main ......')
+  const preimage = new Preimage([Word.fromNumber(2147483648),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(2147483648),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(0),
+    Word.fromNumber(128)])
+
+    
+  let Sha256dProgram = ZkProgram({
+    publicInput: Hash,
+  
+    methods: {
+      baseCase: {
+        privateInputs: [Preimage],
+  
+        method(publicInput: Hash, preimage: Preimage) {
+          publicInput.assertEquals(Sha256.sha256(preimage));
+        },
+      },
+  
+      inductiveCase: {
+        privateInputs: [Preimage, SelfProof],
+  
+        method(publicInput: Hash, preimage: Preimage, earlierProof: SelfProof<Hash>) {
+          earlierProof.verify();
+          publicInput.assertEquals(Sha256.sha256(preimage));
+        },
+      },
+    },
+  });
+
+  let MyProof = ZkProgram.Proof(Sha256dProgram);
+
+  console.log('program digest', Sha256dProgram.digest());
+  
+  console.log('compiling MyProgram...');
+  let { verificationKey } = await Sha256dProgram.compile();
+  console.log('verification key', verificationKey.slice(0, 10) + '..');
+
+
+  const hashbuf = Buffer.from(sha256("80000000000000000000000000000000"), 'hex');
+
+  console.log(hashbuf.toString('hex'))
+  const hash = Hash.fromBuffer(hashbuf)
+  
+  console.log('proving base case...');
+  let proof = await Sha256dProgram.baseCase(hash, preimage);
+  
+  console.log('verify...');
+  let ok = await verify(proof, verificationKey);
+  console.log('ok?', ok);
+  
+  console.log('proving step 1...');
+  const hash1 = Sha256.sha256(preimage);
+  
+  console.log('hash1', hash1.toString());
+  proof = await Sha256dProgram.inductiveCase(hash1, preimage, proof);
+  console.log('verify alternative...');
+  ok = await Sha256dProgram.verify(proof);
+  console.log('ok (alternative)?', ok);
+
+  // console.log('proving step 2...');
+  // proof = await Sha256dProgram.inductiveCase(hash1, new Preimage([Word.fromNumber(2147483648),
+  //   Word.fromNumber(1),
+  //   Word.fromNumber(1),
+  //   Word.fromNumber(1),
+  //   Word.fromNumber(2147483648),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(0),
+  //   Word.fromNumber(128)]), proof);
+  // console.log('verify alternative...');
+  // ok = await Sha256dProgram.verify(proof);
+  // console.log('ok (alternative)?', ok);
+
+
+}
+
 try {
-  await main();
+  await isReady
+  //await main();
+  await recursion_main();
+
+  await shutdown()
 } catch (error) {
   console.log(error)
 }
