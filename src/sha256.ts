@@ -13,6 +13,14 @@ import {
 import { createHash } from 'crypto'
 
 
+export function sha256(hexstr: string): string {
+  return createHash('sha256').update(Buffer.from(hexstr, 'hex')).digest('hex');
+}
+
+export function hash256(hexstr: string): string {
+  return sha256(sha256(hexstr))
+}
+
 const N = 32
 class Word extends CircuitValue {
   @arrayProp(Bool, N) value: Bool[];
@@ -172,6 +180,26 @@ export class Preimage extends CircuitValue {
     this.value = value;
   }
 
+  static fromWords(hash: Word[]): Preimage {
+
+    let w: Word[] = [];
+
+    for (let i = 0; i < 8; i++) {
+      w.push(hash[i]);
+    }
+
+    w.push(Word.fromNumber(0x80000000));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0));
+    w.push(Word.fromNumber(0x100));
+
+    return new Preimage(w);
+  }
+
   static check(x: Preimage) {
 
   }
@@ -189,15 +217,36 @@ export class Hash extends CircuitValue {
     return new Hash(bits);
   }
 
+  static fromWords(w: Word[]) {
+    let bits: Bool[] = [];
+
+    for (let i = 0; i < 8; i++) {
+      for (let j = 31; j >= 0; j--) {
+        bits.push(w[i].value[j])
+      }
+    }
+    return Hash.fromBools(bits);
+  }
+
   static fromBuffer(buffer: Buffer) {
 
     let r: Bool[] = [];
     for (let i = 0; i < 32; i++) {
       r.push(...Field.fromNumber(buffer[i]).toBits(8).reverse());
-
     }
 
     return new Hash(r);
+  }
+
+  toString() {
+    let r: number[] = [];
+
+    for (let i = 0; i < 32; i++) {
+      const t = this.value.slice(i * 8, i * 8 + 8).reverse();
+      r.push(Number(Field.ofBits(t).toBigInt()));
+    }
+
+    return Buffer.from(r).toString('hex')
   }
 }
 
@@ -209,29 +258,34 @@ export default class Sha256 extends Circuit {
 
     const h0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19].map(n => Word.fromNumber(n));
 
-    const h = Sha256.g(h0, preimage.value)
+    //const h = Sha256.g(h0, preimage.value)
+    const h = [
+      Word.fromNumber(1014624693),
+      Word.fromNumber(3389675815),
+      Word.fromNumber(1554101027),
+      Word.fromNumber(1870771540),
+      Word.fromNumber(2111610364),
+      Word.fromNumber(2795639350),
+      Word.fromNumber(3630102064),
+      Word.fromNumber(1621806255),
+    ]
     // Circuit.asProver(() => {
-    //   for (let i = 0; i < h.length; i++) {
-    //     console.log('wi', i, h[i].toNumString());
+    //   for (let i = 0; i < 8; i++) {
+    //     console.log('ih', i , h[i].toNumString())
     //   }
     // })
 
-    let bits: Bool[] = [];
 
-    for (let i = 0; i < 8; i++) {
-      for (let j = 31; j >= 0; j--) {
-        bits.push(h[i].value[j])
-      }
-    }
+    const dhashPreimage = Preimage.fromWords(h);
 
+    const doublehash = Sha256.g(h0, dhashPreimage.value)
 
     // Circuit.asProver(() => {
 
-    //   console.log("aaa", bits.map(b => b.toBoolean() ? "1" : '0').join(""))
-    //   console.log("aaa", hash.value.map(b => b.toBoolean() ? "1" : '0').join(""))
+    //   console.log("doublehash", Hash.fromWords(doublehash).toString())
     // })
 
-    hash.assertEquals(Hash.fromBools(bits));
+    hash.assertEquals(Hash.fromWords(doublehash));
 
   }
 
@@ -257,41 +311,6 @@ export default class Sha256 extends Circuit {
       0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2].map(n => Word.fromNumber(n));
 
 
-    // for (let i = 0; i < 64; i++) {
-    //   // const ch = ((e & f) ^ (~e & g));
-    //   const ch = Word.xor(Word.and(e, f), (Word.and(Word.not(e), g)));
-    //   //const maj = ((a & b) ^ (a & c) ^ (b & c));
-    //   const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
-    //   //const sigma0 = ((a << 30) | (a >>> 2)) ^ ((a << 19) | (a >>> 13)) ^ ((a << 10) | (a >>> 22));
-    //   const sigma0 = Word.xor(
-    //     Word.xor(
-    //       Word.or(Word.shiftL(a, Field(30)), Word.shiftR(a, Field(2))),
-    //       Word.or(Word.shiftL(a, Field(19)), Word.shiftR(a, Field(13)))),
-    //     Word.or(Word.shiftL(a, Field(10)), Word.shiftR(a, Field(22))));
-
-    //   // const sigma1 = ((e << 26) | (e >>> 6)) ^ ((e << 21) | (e >>> 11)) ^ ((e << 7) | (e >>> 25));
-    //   const sigma1 = Word.xor(
-    //     Word.xor(
-    //       Word.or(Word.shiftL(e, Field(26)), Word.shiftR(e, Field(6))),
-    //       Word.or(Word.shiftL(e, Field(21)), Word.shiftR(e, Field(11)))),
-    //     Word.or(Word.shiftL(e, Field(7)), Word.shiftR(e, Field(25))));
-
-    //   // const t1 = (h + sigma1 + ch + K[i] + W[i]);
-    //   const t1 = Sha256.mod_add_5([h, sigma1, ch, k[i], w[i]]);
-
-    //   // const t2 = (sigma0 + maj);
-    //   const t2 = Word.add(sigma0, maj);
-
-    //   h = g;
-    //   g = f;
-    //   f = e;
-    //   e = Word.add(d, t1);
-    //   d = c;
-    //   c = b;
-    //   b = a;
-    //   a = Word.add(t1, t2);
-    // }
-
     for (let i = 0; i < 64; i++) {
       //S1 := rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)
       const sigma1 = Word.xor(Word.xor(Word.right_rotate(e, 6), Word.right_rotate(e, 11)), Word.right_rotate(e, 25));
@@ -305,7 +324,7 @@ export default class Sha256 extends Circuit {
       const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
       //temp2 := S0 + maj
       const t2 = Word.add(sigma0, maj);
-  
+
       h = g
       g = f
       f = e
@@ -314,7 +333,7 @@ export default class Sha256 extends Circuit {
       c = b
       b = a
       a = Word.add(t1, t2);
-      
+
     }
 
     return [Word.add(hprev[0], a),
@@ -407,12 +426,12 @@ export default class Sha256 extends Circuit {
       w56, w57, w58, w59, w60, w61, w62, w63
     ];
 
-      // Circuit.asProver(() => {
+    // Circuit.asProver(() => {
 
-      //   for (let i = 0; i < w.length; i++) {
-      //     console.log('wi', i, w[i].toNumString());
-      //   }
-      // })
+    //   for (let i = 0; i < w.length; i++) {
+    //     console.log('wi', i, w[i].toNumString());
+    //   }
+    // })
 
     // const w = [
     //   Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0),
@@ -431,21 +450,10 @@ export default class Sha256 extends Circuit {
 
 
   static s0(w: Word): Word {
-    // const r1_0 = Word.or(Word.shiftL(w, Field(25)), Word.shiftR(w, Field(7)));
-    // const r1_1 = Word.or(Word.shiftL(w, Field(14)), Word.shiftR(w, Field(18)));
-    // const r1_2 = Word.shiftR(w, Field(3));
-    // return Word.xor(Word.xor(r1_0, r1_1), r1_2);
-    //		s0 := rightRotate(w[i-15], 7) ^ rightRotate(w[i-15], 18) ^ (w[i-15] >> 3)
-
     return Word.xor(Word.xor(Word.right_rotate(w, 7), Word.right_rotate(w, 18)), Word.shiftR(w, Field(3)));
   }
 
   static s1(w: Word): Word {
-    // const r2_0 = Word.or(Word.shiftL(w, Field(15)), Word.shiftR(w, Field(17)));
-    // const r2_1 = Word.or(Word.shiftL(w, Field(13)), Word.shiftR(w, Field(19)));
-    // const r2_2 = Word.shiftR(w, Field(10));
-    // return Word.xor(Word.xor(r2_0, r2_1), r2_2);
-    //s1 := rightRotate(w[i-2], 17) ^ rightRotate(w[i-2], 19) ^ (w[i-2] >> 10)
     return Word.xor(Word.xor(Word.right_rotate(w, 17), Word.right_rotate(w, 19)), Word.shiftR(w, Field(10)));
   }
 
@@ -473,7 +481,6 @@ export default class Sha256 extends Circuit {
 
 
 
-
 async function main() {
 
   await isReady
@@ -497,20 +504,20 @@ async function main() {
   Word.fromNumber(128)])
 
 
+  const hashbuf = Buffer.from(hash256("80000000000000000000000000000000"), 'hex');
 
-
-
-  const hashbuf = createHash('sha256').update(Buffer.from("80000000000000000000000000000000", 'hex')).digest();
-
+  console.log(hashbuf.toString('hex'))
   const hash = Hash.fromBuffer(hashbuf)
 
+  console.log(hash.toString())
+
   // let info = Circuit.constraintSystem(() => {
-   
+
   //   console.log('constraintSystem...')
   //   Sha256.main(Sha256.witness(Preimage, () => preimage), Sha256.witness(Hash, () => hash));
-    
+
   // });
-  
+
   // console.log(`Sha256.main() creates ${info.rows} contraints`);
 
   const kp = Sha256.generateKeypair();
