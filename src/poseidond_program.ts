@@ -5,11 +5,25 @@ import {
   circuitMain,
   public_,
   SelfProof, ZkProgram, verify,
-  isReady
+  isReady,
+  shutdown
 } from 'snarkyjs';
 
 
 //console.log('Main verify ok?', ok);
+
+class Poseidond extends Circuit {
+  @circuitMain
+  static increase( preimage: Field, @public_ hash: Field) {
+
+    Poseidond.main(preimage).assertEquals(hash);
+
+  }
+
+  static main(preimage: Field) :  Field {
+    return Poseidon.hash([Poseidon.hash([preimage])]);
+  }
+}
 
 let PoseidondProgram = ZkProgram({
   publicInput: Field,
@@ -28,8 +42,7 @@ let PoseidondProgram = ZkProgram({
 
       method(publicInput: Field, earlierProof: SelfProof<Field>) {
         earlierProof.verify();
-        Poseidon.hash([Poseidon.hash([earlierProof.publicInput])]).assertEquals(publicInput);
-        //earlierProof.publicInput.add(1).assertEquals(publicInput);
+        Poseidond.main(earlierProof.publicInput).assertEquals(publicInput);
       },
     },
   },
@@ -97,6 +110,7 @@ async function main() {
   ok = await PoseidondProgram.verify(proof);
   console.log('ok (alternative)?', ok);
 
+  await shutdown();
 }
 
 
