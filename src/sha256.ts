@@ -4,9 +4,7 @@ import {
   circuitMain,
   public_,
   isReady,
-  Encoding,
   Bool,
-  UInt32,
   shutdown,
   arrayProp,
   CircuitValue,
@@ -20,7 +18,7 @@ class Word extends CircuitValue {
   @arrayProp(Bool, N) value: Bool[];
 
   constructor(value: Bool[]) {
-    super();
+    super(value);
     this.value = value;
   }
 
@@ -144,10 +142,10 @@ class Word extends CircuitValue {
     return ret;
   }
 
-  // static right_rotate(n: Word, d: Field) : Word  {
-  //   //(n >> d) | (n << (32 - d))
-  //   return Word.or(Word.shiftR(n, d), Word.shiftL(n,  Field.fromNumber(32).sub(d)));
-  // }
+  static right_rotate(n: Word, d: Field) : Word  {
+    //(n >> d) | (n << (32 - d))
+    return Word.or(Word.shiftR(n, d), Word.shiftL(n,  Field.fromNumber(32).sub(d)));
+  }
 
   static check(c: Word) {
 
@@ -158,8 +156,12 @@ export class Preimage extends CircuitValue {
   @arrayProp(Word, 16) value: Word[];
 
   constructor(value: Word[]) {
-    super();
+    super(value);
     this.value = value;
+  }
+
+  static check(x: Preimage) {
+
   }
 }
 
@@ -167,7 +169,7 @@ export class Hash extends CircuitValue {
   @arrayProp(Bool, 256) value: Bool[];
 
   constructor(value: Bool[]) {
-    super();
+    super(value);
     this.value = value;
   }
 
@@ -243,39 +245,64 @@ export default class Sha256 extends Circuit {
       0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2].map(n => Word.fromNumber(n));
 
 
+    // for (let i = 0; i < 64; i++) {
+    //   // const ch = ((e & f) ^ (~e & g));
+    //   const ch = Word.xor(Word.and(e, f), (Word.and(Word.not(e), g)));
+    //   //const maj = ((a & b) ^ (a & c) ^ (b & c));
+    //   const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
+    //   //const sigma0 = ((a << 30) | (a >>> 2)) ^ ((a << 19) | (a >>> 13)) ^ ((a << 10) | (a >>> 22));
+    //   const sigma0 = Word.xor(
+    //     Word.xor(
+    //       Word.or(Word.shiftL(a, Field(30)), Word.shiftR(a, Field(2))),
+    //       Word.or(Word.shiftL(a, Field(19)), Word.shiftR(a, Field(13)))),
+    //     Word.or(Word.shiftL(a, Field(10)), Word.shiftR(a, Field(22))));
+
+    //   // const sigma1 = ((e << 26) | (e >>> 6)) ^ ((e << 21) | (e >>> 11)) ^ ((e << 7) | (e >>> 25));
+    //   const sigma1 = Word.xor(
+    //     Word.xor(
+    //       Word.or(Word.shiftL(e, Field(26)), Word.shiftR(e, Field(6))),
+    //       Word.or(Word.shiftL(e, Field(21)), Word.shiftR(e, Field(11)))),
+    //     Word.or(Word.shiftL(e, Field(7)), Word.shiftR(e, Field(25))));
+
+    //   // const t1 = (h + sigma1 + ch + K[i] + W[i]);
+    //   const t1 = Sha256.mod_add_5([h, sigma1, ch, k[i], w[i]]);
+
+    //   // const t2 = (sigma0 + maj);
+    //   const t2 = Word.add(sigma0, maj);
+
+    //   h = g;
+    //   g = f;
+    //   f = e;
+    //   e = Word.add(d, t1);
+    //   d = c;
+    //   c = b;
+    //   b = a;
+    //   a = Word.add(t1, t2);
+    // }
+
     for (let i = 0; i < 64; i++) {
-      // const ch = ((e & f) ^ (~e & g));
-      const ch = Word.xor(Word.and(e, f), (Word.and(Word.not(e), g)));
-      //const maj = ((a & b) ^ (a & c) ^ (b & c));
-      const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
-      //const sigma0 = ((a << 30) | (a >>> 2)) ^ ((a << 19) | (a >>> 13)) ^ ((a << 10) | (a >>> 22));
-      const sigma0 = Word.xor(
-        Word.xor(
-          Word.or(Word.shiftL(a, Field(30)), Word.shiftR(a, Field(2))),
-          Word.or(Word.shiftL(a, Field(19)), Word.shiftR(a, Field(13)))),
-        Word.or(Word.shiftL(a, Field(10)), Word.shiftR(a, Field(22))));
-
-      // const sigma1 = ((e << 26) | (e >>> 6)) ^ ((e << 21) | (e >>> 11)) ^ ((e << 7) | (e >>> 25));
-      const sigma1 = Word.xor(
-        Word.xor(
-          Word.or(Word.shiftL(e, Field(26)), Word.shiftR(e, Field(6))),
-          Word.or(Word.shiftL(e, Field(21)), Word.shiftR(e, Field(11)))),
-        Word.or(Word.shiftL(e, Field(7)), Word.shiftR(e, Field(25))));
-
-      // const t1 = (h + sigma1 + ch + K[i] + W[i]);
+      //S1 := rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)
+      const sigma1 = Word.xor(Word.xor(Word.right_rotate(e, Field(6)), Word.right_rotate(e, Field(11))), Word.right_rotate(e, Field(25)));
+      //ch := (e & f) ^ ((^e) & g)
+      const ch = Word.xor(Word.and(e, f), Word.and(Word.not(e), g));
+      //temp1 := h + S1 + ch + k[i] + w[i]
       const t1 = Sha256.mod_add_5([h, sigma1, ch, k[i], w[i]]);
-
-      // const t2 = (sigma0 + maj);
+      //S0 := rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)
+      const sigma0 = Word.xor(Word.xor(Word.right_rotate(a, Field(2)), Word.right_rotate(a, Field(13))), Word.right_rotate(a, Field(22)));
+      //maj := (a & b) ^ (a & c) ^ (b & c)
+      const maj = Word.xor(Word.xor(Word.and(a, b), Word.and(a, c)), Word.and(b, c));
+      //temp2 := S0 + maj
       const t2 = Word.add(sigma0, maj);
-
-      h = g;
-      g = f;
-      f = e;
+  
+      h = g
+      g = f
+      f = e
       e = Word.add(d, t1);
-      d = c;
-      c = b;
-      b = a;
+      d = c
+      c = b
+      b = a
       a = Word.add(t1, t2);
+      
     }
 
     return [Word.add(hprev[0], a),
@@ -392,17 +419,22 @@ export default class Sha256 extends Circuit {
 
 
   static s0(w: Word): Word {
-    const r1_0 = Word.or(Word.shiftL(w, Field(25)), Word.shiftR(w, Field(7)));
-    const r1_1 = Word.or(Word.shiftL(w, Field(14)), Word.shiftR(w, Field(18)));
-    const r1_2 = Word.shiftR(w, Field(3));
-    return Word.xor(Word.xor(r1_0, r1_1), r1_2);
+    // const r1_0 = Word.or(Word.shiftL(w, Field(25)), Word.shiftR(w, Field(7)));
+    // const r1_1 = Word.or(Word.shiftL(w, Field(14)), Word.shiftR(w, Field(18)));
+    // const r1_2 = Word.shiftR(w, Field(3));
+    // return Word.xor(Word.xor(r1_0, r1_1), r1_2);
+    //		s0 := rightRotate(w[i-15], 7) ^ rightRotate(w[i-15], 18) ^ (w[i-15] >> 3)
+
+    return Word.xor(Word.xor(Word.right_rotate(w, Field(7)), Word.right_rotate(w, Field(18))), Word.shiftR(w, Field(3)));
   }
 
   static s1(w: Word): Word {
-    const r2_0 = Word.or(Word.shiftL(w, Field(15)), Word.shiftR(w, Field(17)));
-    const r2_1 = Word.or(Word.shiftL(w, Field(13)), Word.shiftR(w, Field(19)));
-    const r2_2 = Word.shiftR(w, Field(10));
-    return Word.xor(Word.xor(r2_0, r2_1), r2_2);
+    // const r2_0 = Word.or(Word.shiftL(w, Field(15)), Word.shiftR(w, Field(17)));
+    // const r2_1 = Word.or(Word.shiftL(w, Field(13)), Word.shiftR(w, Field(19)));
+    // const r2_2 = Word.shiftR(w, Field(10));
+    // return Word.xor(Word.xor(r2_0, r2_1), r2_2);
+    //s1 := rightRotate(w[i-2], 17) ^ rightRotate(w[i-2], 19) ^ (w[i-2] >> 10)
+    return Word.xor(Word.xor(Word.right_rotate(w, Field(17)), Word.right_rotate(w, Field(19))), Word.shiftR(w, Field(10)));
   }
 
   static mod_add_4(a: Word[]): Word {
@@ -412,7 +444,7 @@ export default class Sha256 extends Circuit {
       acc = acc.add(Field.ofBits(a[i].value));
     }
 
-    return new Word(acc.toBits(34).slice(0, 32));
+    return new Word(acc.toBits(35).slice(0, 32));
   }
 
   static mod_add_5(a: Word[]): Word {
@@ -433,9 +465,8 @@ export default class Sha256 extends Circuit {
 async function main() {
 
   await isReady
-  const kp = Sha256.generateKeypair();
 
-  console.log('generateKeypair ......')
+  console.log('generateKeypair ......1111')
   const preimage = new Preimage([Word.fromNumber(2147483648),
   Word.fromNumber(0),
   Word.fromNumber(0),
@@ -455,10 +486,22 @@ async function main() {
 
 
 
+
+
   const hashbuf = createHash('sha256').update(Buffer.from("80000000000000000000000000000000", 'hex')).digest();
 
   const hash = Hash.fromBuffer(hashbuf)
 
+  // let info = Circuit.constraintSystem(() => {
+   
+  //   console.log('constraintSystem...')
+  //   Sha256.main(Sha256.witness(Preimage, () => preimage), Sha256.witness(Hash, () => hash));
+    
+  // });
+  
+  // console.log(`Sha256.main() creates ${info.rows} contraints`);
+
+  const kp = Sha256.generateKeypair();
   const pi = Sha256.prove([preimage], [hash], kp);
   console.log('proof', pi);
   const success = Sha256.verify([hash], kp.verificationKey(), pi)
@@ -468,4 +511,8 @@ async function main() {
 }
 
 
-main();
+try {
+  await main();
+} catch (error) {
+  console.log(error)
+}
