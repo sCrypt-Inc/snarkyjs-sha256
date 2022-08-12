@@ -46,7 +46,7 @@ class Word extends CircuitValue {
     return new Word(Field.fromNumber(n).toBits(N))
   }
 
-  static shiftR(w: Word, n: Field): Word {
+  static shiftR(w: Word, n: number): Word {
     const arr = w.value;
 
     let r: Bool[] = Word.fromNumber(0).value;
@@ -55,9 +55,9 @@ class Word extends CircuitValue {
     // 010
     for (let i = 0; i < 32; i++) {
       for (let j = 0; j < 32; j++) {
-        const toUpdate = Field(j - i).equals(n)
+        //const toUpdate = Field(j - i).equals(n)
         // little endian
-        r[i] = Circuit.if(toUpdate, arr[j], r[i])
+        r[i] = j - i == n ? arr[j] : r[i];
       }
     }
 
@@ -67,7 +67,7 @@ class Word extends CircuitValue {
   }
 
 
-  static shiftL(w: Word, n: Field): Word {
+  static shiftL(w: Word, n: number): Word {
     const arr = w.value;
 
     let r: Bool[] = Word.fromNumber(0).value;
@@ -76,9 +76,8 @@ class Word extends CircuitValue {
     // 001
     for (let i = 0; i < 32; i++) {
       for (let j = 0; j < 32; j++) {
-        const toUpdate = Field(j - i).equals(n)
         // little endian
-        r[j] = Circuit.if(toUpdate, arr[i], r[j])
+        r[j] = j - i == n ? arr[i] : r[j];
       }
     }
 
@@ -459,11 +458,11 @@ export default class Sha256 extends Circuit {
 
 
   static s0(w: Word): Word {
-    return Word.xor(Word.xor(Word.right_rotate(w, 7), Word.right_rotate(w, 18)), Word.shiftR(w, Field(3)));
+    return Word.xor(Word.xor(Word.right_rotate(w, 7), Word.right_rotate(w, 18)), Word.shiftR(w, 3));
   }
 
   static s1(w: Word): Word {
-    return Word.xor(Word.xor(Word.right_rotate(w, 17), Word.right_rotate(w, 19)), Word.shiftR(w, Field(10)));
+    return Word.xor(Word.xor(Word.right_rotate(w, 17), Word.right_rotate(w, 19)), Word.shiftR(w, 10));
   }
 
   static mod_add_4(a: Word[]): Word {
@@ -637,8 +636,8 @@ async function recursion_main() {
 
 try {
   await isReady
-  //await main();
-  await recursion_main();
+  await main();
+  //await recursion_main();
 
   await shutdown()
 } catch (error) {
