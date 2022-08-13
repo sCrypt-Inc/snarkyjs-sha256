@@ -272,10 +272,72 @@ export class Chunk extends CircuitValue {
       Word.fromNumber(256)])
   }
 
+  static fromBuffer512(buffer: Buffer): Chunk {
+
+    if(buffer.length != 64) {
+      throw new Error("expected buffer length = 64")
+    }
+
+    return new Chunk([Word.fromNumber(buffer.readUInt32BE(0)),
+      Word.fromNumber(buffer.readUInt32BE(4)),
+      Word.fromNumber(buffer.readUInt32BE(8)),
+      Word.fromNumber(buffer.readUInt32BE(12)),
+      Word.fromNumber(buffer.readUInt32BE(16)),
+      Word.fromNumber(buffer.readUInt32BE(20)),
+      Word.fromNumber(buffer.readUInt32BE(24)),
+      Word.fromNumber(buffer.readUInt32BE(28)),
+      Word.fromNumber(buffer.readUInt32BE(32)),
+      Word.fromNumber(buffer.readUInt32BE(36)),
+      Word.fromNumber(buffer.readUInt32BE(40)),
+      Word.fromNumber(buffer.readUInt32BE(44)),
+      Word.fromNumber(buffer.readUInt32BE(48)),
+      Word.fromNumber(buffer.readUInt32BE(52)),
+      Word.fromNumber(buffer.readUInt32BE(56)),
+      Word.fromNumber(buffer.readUInt32BE(60))])
+  }
+
   static check(x: Chunk) {
 
   }
 }
+
+
+export class Tx4Chunk extends CircuitValue {
+  @arrayProp(Chunk, 4) value: Chunk[];
+  constructor(value: Chunk[]) {
+    super(value);
+    this.value = value;
+  }
+
+  static check(x: Tx4Chunk) {
+
+  }
+}
+
+export class Tx5Chunk extends CircuitValue {
+  @arrayProp(Chunk, 5) value: Chunk[];
+  constructor(value: Chunk[]) {
+    super(value);
+    this.value = value;
+  }
+
+  static check(x: Tx5Chunk) {
+
+  }
+}
+
+export class Tx6Chunk extends CircuitValue {
+  @arrayProp(Chunk, 6) value: Chunk[];
+  constructor(value: Chunk[]) {
+    super(value);
+    this.value = value;
+  }
+
+  static check(x: Tx6Chunk) {
+
+  }
+}
+
 
 export class Hash extends CircuitValue {
   @arrayProp(Bool, 256) value: Bool[];
