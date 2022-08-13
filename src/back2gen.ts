@@ -1,116 +1,96 @@
 import {
     SelfProof, Field, ZkProgram, CircuitValue,
-    prop, isReady, shutdown, CircuitString,
-    Character, Circuit, Bool
+    isReady, shutdown, Bool, arrayProp, Poseidon
 } from 'snarkyjs';
 
+await isReady;
 
-class RawTransaction extends CircuitValue {
-    // assume data is in hex encoded format, note the length limit 128 of CircuitString
-    @prop data: CircuitString;
-
-    constructor(data: CircuitString) {
-        super(data);
+// fixed in tx protocal
+const PREFIX_LEN_IN_BYTES = 5; 
+class RawTxPrefix extends CircuitValue {
+    @arrayProp(Bool, PREFIX_LEN_IN_BYTES * 8) value: Bool[];
+    constructor(value: Bool[]) {
+        super(value);
     }
+}
 
-    hashToTxId(): TxId {
-        return new TxId(this.data.hash());
-    }
-
-    isSpending(txId: TxId) {
-        const TXID_START_POS_IN_HEX = 10; // 5 bytes * 2
-        let txIdHex = txId.toHex();
-        for (let i = 0; i < TxId.SIZE_IN_HEX; i++) {
-            let src = this.data.values[TXID_START_POS_IN_HEX + i];
-            src.assertEquals(txIdHex[i])
-        }
-    }
-
-    toString(): string {
-        return this.data.toString();
+// determined by use case
+const POSTFIX_LEN_IN_BYTES = 1;
+class RawTxPostfix extends CircuitValue {
+    @arrayProp(Bool, POSTFIX_LEN_IN_BYTES * 8) value: Bool[];
+    constructor(value: Bool[]) {
+        super(value);
     }
 }
 
 class TxId extends CircuitValue {
-    // real value is 32 bytes, could use smaller value for test
-    static SIZE_IN_BYTES = 32;
-    static SIZE_IN_HEX = TxId.SIZE_IN_BYTES * 2;
-
-    @prop value: Field;
-    constructor(value: Field) {
+    @arrayProp(Bool, 32 * 8) value: Bool[];
+    constructor(value: Bool[]) {
         super(value);
     }
-
-    toHex(): Character[] {
-        let bits = this.value.toBits();
-        let hex = [];
-        for (let i = 0; i < TxId.SIZE_IN_HEX; i++) {
-            let hexBits = bits.slice(i * 4, (i + 1) * 4);
-            hex.push(TxId.bits2Hex(hexBits));
-        }
-        return hex;
-    }
-
-    static bits2Hex(bits: Bool[]): Character {
-        let hexCodes = ['0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
-        let c = Character.fromString('0');
-        for (let i = 0; i < 16; i++) {
-            c = Circuit.if(Field.fromNumber(i).equals(Field.ofBits(bits)), Character.fromString(hexCodes[i]), c);
-        }
-        return c;
-    }
-
     toString(): string {
-        return CircuitString.fromCharacters(this.toHex()).toString();
+        return bits2Hex(this.value);
     }
 }
 
-class TxIdBinding extends CircuitValue {
-    @prop value: TxId; // tx id
-    @prop fromGenesis: TxId; // bind to genesis tx id
+const HEX_CHARS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
 
-    constructor(value: TxId, fromGenesis: TxId) {
-        super(value, fromGenesis);
-    }
+function hex2Bits(hex: string): Bool[] {
+    let bits: Bool[] = [];
+    hex.split('').forEach(c => {
+        let i = HEX_CHARS.indexOf(c);
+        bits.push(...Field.fromNumber(i >= 0 ? i : 0).toBits(4))
+    });
+    return bits;
 }
+
+function bits2Hex(bits: Bool[]): string {
+    return chunk(bits, 4)
+        .map(cbits =>
+            HEX_CHARS.at(Number(Field.ofBits(cbits).toBigInt()))
+        )
+        .join('')
+}
+
+function chunk(arr: Array<any>, size: number) {
+    return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+        arr.slice(i * size, i * size + size)
+    );
+}
+
+function hash2TxId(bits: Bool[]): TxId {
+    let hash = Poseidon.hash(chunk(bits, 255).map(cbits => Field.ofBits(cbits))).toBits();
+    hash.push(new Bool(false)); // padding hash to 256 bits
+    if (hash.length !== 256) throw Error('TxId should be length of 256');
+    return new TxId(hash);
+}
+
+// a dummy genesis tx id, should be modified in production env
+const GENESIS_TX_ID = new TxId(hex2Bits("7967a5185e907a25225574544c31f7b059c1a191d65b53dcc1554d339c4f9efc"));
 
 let TracebleCoin = ZkProgram({
-    publicInput: TxIdBinding,
+    publicInput: TxId,
 
     methods: {
         genesis: {
-            privateInputs: [RawTransaction],
+            privateInputs: [],
 
-            method(txIdBinding: TxIdBinding, curTx: RawTransaction) {
-                let genesisTxId = curTx.hashToTxId();
-                genesisTxId.assertEquals(txIdBinding.value);
-                genesisTxId.assertEquals(txIdBinding.fromGenesis);
+            method(txId: TxId) {
+                txId.assertEquals(GENESIS_TX_ID);
             }
         },
 
         transfer: {
-            privateInputs: [RawTransaction, SelfProof],
+            privateInputs: [RawTxPrefix, RawTxPostfix, SelfProof],
 
-            method(prevTxIdBinding: TxIdBinding, curTx: RawTransaction, earlyProof: SelfProof<TxIdBinding>) {
+            method(curTxId: TxId, prefix: RawTxPrefix, postfix: RawTxPostfix, earlyProof: SelfProof<TxId>) {
                 earlyProof.verify();
-
-                // validate `fromGenesis` claimed is the same with the proved one early
-                prevTxIdBinding.fromGenesis.assertEquals(earlyProof.publicInput.fromGenesis);
-
-                // validate `curTx` is spending `prevTx`
-                curTx.isSpending(prevTxIdBinding.value);
+                let curRawTx = [...prefix.value, ...earlyProof.publicInput.value, ...postfix.value];
+                curTxId.assertEquals(hash2TxId(curRawTx));
             }
         }
     }
 })
-
-function buildTx(prevTxId: TxId): RawTransaction {
-    const prefix = "0123456789";
-    // Note: CircuitString has a length limit of 128 currently. So here just use a minimum dummy hex version.
-    let hexString = prefix + prevTxId.toString();
-    return new RawTransaction(CircuitString.fromString(hexString))
-}
 
 async function main() {
     await isReady;
@@ -120,38 +100,30 @@ async function main() {
         await TracebleCoin.compile();
 
         console.log('generate genesis ... ', new Date());
-        let genesisTx = new RawTransaction(CircuitString.fromString("0123456789abcdef"))
-        let genesisTxId = genesisTx.hashToTxId()
-        console.log(`genesisTxId: ${genesisTxId.toString()}`)
-        let genesisProof = await TracebleCoin.genesis(new TxIdBinding(genesisTxId, genesisTxId), genesisTx)
+        let genesisProof = await TracebleCoin.genesis(GENESIS_TX_ID);
         // console.log(genesisProof)
 
         let prevProof = genesisProof;
-        let prevTxId = genesisTxId;
+        let prevTxId = GENESIS_TX_ID;
+
+        // dummy raw tx prefix
+        const txPrefix = hex2Bits("0123456789");
+
         for (let i = 0; i < 2; i++) {
-            let tx = buildTx(prevTxId);
-            prevProof = await TracebleCoin.transfer(new TxIdBinding(prevTxId, genesisTxId), tx, prevProof);
+            // dummy rax tx postfix
+            let txPostfix = hex2Bits('0' + i)
+            let tx = [...txPrefix, ...prevTxId.value, ...txPostfix];
+            let txId = hash2TxId(tx);
+            prevProof = await TracebleCoin.transfer(txId, new RawTxPrefix(txPrefix), new RawTxPostfix(txPostfix), prevProof);
             prevProof.verify();
-            console.log(`Tx_${i} passed verify, ${tx.toString()}, txId: ${tx.hashToTxId().toString()}, prevTxId: ${prevTxId.toString()} `, new Date())
-            prevTxId = tx.hashToTxId();
+            console.log(`Tx_${i} passed verify, txId: ${txId.toString()}, prevTxId: ${prevTxId.toString()} `, new Date())
+            prevTxId = txId;
         }
 
-        // for fake tx
-        let fakedGenesis = new RawTransaction(CircuitString.fromString("0000000000000000"))
-        let fakedGenesisTxId = fakedGenesis.hashToTxId()
-        let fakedGenesisProof = await TracebleCoin.genesis(new TxIdBinding(fakedGenesisTxId, fakedGenesisTxId), fakedGenesis)
-        let fakedTx = buildTx(fakedGenesisTxId);
-        console.log(`fake tx: ${fakedTx.toString()}`);
+        let fakeTxId = hash2TxId(hex2Bits("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         let throwed = false;
         try {
-            // fake binding with (fakedGenesisTxId, genesisTxId)
-            let fakeBinding = new TxIdBinding(fakedGenesisTxId, genesisTxId)
-            let proof = await TracebleCoin.transfer(
-                fakeBinding,
-                fakedTx,
-                fakedGenesisProof
-            )
-            proof.verify();
+            await TracebleCoin.transfer(fakeTxId, new RawTxPrefix(txPrefix), new RawTxPostfix(hex2Bits('03')), prevProof);
         } catch (error) {
             throwed = true;
             console.log("Bingo, fake tx failed proof verify! ", new Date());
