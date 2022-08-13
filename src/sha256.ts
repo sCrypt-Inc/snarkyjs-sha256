@@ -174,7 +174,7 @@ class Word extends CircuitValue {
   }
 }
 
-export class Preimage extends CircuitValue {
+export class Chunk extends CircuitValue {
   @arrayProp(Word, 16) value: Word[];
 
   constructor(value: Word[]) {
@@ -192,7 +192,7 @@ export class Preimage extends CircuitValue {
   //   return new Hash(r);
   // }
 
-  static fromWords(hash: Word[]): Preimage {
+  static fromWords(hash: Word[]): Chunk {
 
     let w: Word[] = [];
 
@@ -209,10 +209,70 @@ export class Preimage extends CircuitValue {
     w.push(Word.fromNumber(0));
     w.push(Word.fromNumber(0x100));
 
-    return new Preimage(w);
+    return new Chunk(w);
   }
 
-  static check(x: Preimage) {
+
+  /**
+   * can not be used in Circuit
+   * @param buffer 
+   * @returns return a Preimage
+   */
+  static fromBuffer128(buffer: Buffer): Chunk {
+
+    if(buffer.length != 16) {
+      throw new Error("expected buffer length = 16")
+    }
+
+    return new Chunk([Word.fromNumber(buffer.readUInt32BE(0)),
+      Word.fromNumber(buffer.readUInt32BE(4)),
+      Word.fromNumber(buffer.readUInt32BE(8)),
+      Word.fromNumber(buffer.readUInt32BE(12)),
+      Word.fromNumber(0x80000000),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(128)])
+  }
+
+
+  /**
+   * can not be used in Circuit
+   * @param buffer 
+   * @returns return a Preimage
+  */
+  static fromBuffer256(buffer: Buffer): Chunk {
+
+    if(buffer.length != 32) {
+      throw new Error("expected buffer length = 32")
+    }
+
+    return new Chunk([Word.fromNumber(buffer.readUInt32BE(0)),
+      Word.fromNumber(buffer.readUInt32BE(4)),
+      Word.fromNumber(buffer.readUInt32BE(8)),
+      Word.fromNumber(buffer.readUInt32BE(12)),
+      Word.fromNumber(buffer.readUInt32BE(16)),
+      Word.fromNumber(buffer.readUInt32BE(20)),
+      Word.fromNumber(buffer.readUInt32BE(24)),
+      Word.fromNumber(buffer.readUInt32BE(28)),
+      Word.fromNumber(0x80000000),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(0),
+      Word.fromNumber(256)])
+  }
+
+  static check(x: Chunk) {
 
   }
 }
@@ -264,37 +324,29 @@ export class Hash extends CircuitValue {
 
 export default class Sha256 extends Circuit {
   @circuitMain
-  static main(preimage: Preimage, @public_ hash: Hash) {
-    hash.assertEquals(Sha256.sha256(preimage));
+  static main(preimage: Chunk, @public_ hash: Hash) {
+    hash.assertEquals(Sha256.sha256([preimage]));
   }
-  static sha256Impl(preimage: Preimage): Word[] {
+  static sha256Impl(preimage: Chunk[]): Word[] {
     console.log('sha256Impl...')
     const h0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19].map(n => Word.fromNumber(n));
-    return Sha256.g(h0, preimage.value)
+    
+    let hi = h0;
+    for (let i = 0; i < preimage.length; i++) {
+      hi = Sha256.g(hi, preimage[i].value)
+    }
+
+    return hi;
   }
 
-  static sha256(preimage: Preimage) {
-    console.log('sha256...')
+  static sha256(preimage: Chunk[]) {
     const h = Sha256.sha256Impl(preimage);
     return Hash.fromWords(h)
   }
 
-  static hash256(preimage: Preimage) {
-    console.log('hash256...')
+  static hash256(preimage: Chunk[]) {
     const hash = Sha256.sha256Impl(preimage);
-
-    // const h = [
-    //   Word.fromNumber(1014624693),
-    //   Word.fromNumber(3389675815),
-    //   Word.fromNumber(1554101027),
-    //   Word.fromNumber(1870771540),
-    //   Word.fromNumber(2111610364),
-    //   Word.fromNumber(2795639350),
-    //   Word.fromNumber(3630102064),
-    //   Word.fromNumber(1621806255),
-    // ]
-
-    return Hash.fromWords(Sha256.sha256Impl(Preimage.fromWords(hash)))
+    return Hash.fromWords(Sha256.sha256Impl([Chunk.fromWords(hash)]))
   }
 
   static compression(hprev: Word[], w: Word[]) {
@@ -358,99 +410,14 @@ export default class Sha256 extends Circuit {
 
   static g(hprev: Word[], chuck: Word[]) {
 
-    const w00 = chuck[0];
-    const w01 = chuck[1];
-    const w02 = chuck[2];
-    const w03 = chuck[3];
-    const w04 = chuck[4];
-    const w05 = chuck[5];
-    const w06 = chuck[6];
-    const w07 = chuck[7];
-    const w08 = chuck[8];
-    const w09 = chuck[9];
-    const w10 = chuck[10];
-    const w11 = chuck[11];
-    const w12 = chuck[12];
-    const w13 = chuck[13];
-    const w14 = chuck[14];
-    const w15 = chuck[15];
-    const w16 = Sha256.mod_add_4([w00, Sha256.s0(w01), w09, Sha256.s1(w14)]);
-    const w17 = Sha256.mod_add_4([w01, Sha256.s0(w02), w10, Sha256.s1(w15)]);
-    const w18 = Sha256.mod_add_4([w02, Sha256.s0(w03), w11, Sha256.s1(w16)]);
-    const w19 = Sha256.mod_add_4([w03, Sha256.s0(w04), w12, Sha256.s1(w17)]);
-    const w20 = Sha256.mod_add_4([w04, Sha256.s0(w05), w13, Sha256.s1(w18)]);
-    const w21 = Sha256.mod_add_4([w05, Sha256.s0(w06), w14, Sha256.s1(w19)]);
-    const w22 = Sha256.mod_add_4([w06, Sha256.s0(w07), w15, Sha256.s1(w20)]);
-    const w23 = Sha256.mod_add_4([w07, Sha256.s0(w08), w16, Sha256.s1(w21)]);
-    const w24 = Sha256.mod_add_4([w08, Sha256.s0(w09), w17, Sha256.s1(w22)]);
-    const w25 = Sha256.mod_add_4([w09, Sha256.s0(w10), w18, Sha256.s1(w23)]);
-    const w26 = Sha256.mod_add_4([w10, Sha256.s0(w11), w19, Sha256.s1(w24)]);
-    const w27 = Sha256.mod_add_4([w11, Sha256.s0(w12), w20, Sha256.s1(w25)]);
-    const w28 = Sha256.mod_add_4([w12, Sha256.s0(w13), w21, Sha256.s1(w26)]);
-    const w29 = Sha256.mod_add_4([w13, Sha256.s0(w14), w22, Sha256.s1(w27)]);
-    const w30 = Sha256.mod_add_4([w14, Sha256.s0(w15), w23, Sha256.s1(w28)]);
-    const w31 = Sha256.mod_add_4([w15, Sha256.s0(w16), w24, Sha256.s1(w29)]);
-    const w32 = Sha256.mod_add_4([w16, Sha256.s0(w17), w25, Sha256.s1(w30)]);
-    const w33 = Sha256.mod_add_4([w17, Sha256.s0(w18), w26, Sha256.s1(w31)]);
-    const w34 = Sha256.mod_add_4([w18, Sha256.s0(w19), w27, Sha256.s1(w32)]);
-    const w35 = Sha256.mod_add_4([w19, Sha256.s0(w20), w28, Sha256.s1(w33)]);
-    const w36 = Sha256.mod_add_4([w20, Sha256.s0(w21), w29, Sha256.s1(w34)]);
-    const w37 = Sha256.mod_add_4([w21, Sha256.s0(w22), w30, Sha256.s1(w35)]);
-    const w38 = Sha256.mod_add_4([w22, Sha256.s0(w23), w31, Sha256.s1(w36)]);
-    const w39 = Sha256.mod_add_4([w23, Sha256.s0(w24), w32, Sha256.s1(w37)]);
-    const w40 = Sha256.mod_add_4([w24, Sha256.s0(w25), w33, Sha256.s1(w38)]);
-    const w41 = Sha256.mod_add_4([w25, Sha256.s0(w26), w34, Sha256.s1(w39)]);
-    const w42 = Sha256.mod_add_4([w26, Sha256.s0(w27), w35, Sha256.s1(w40)]);
-    const w43 = Sha256.mod_add_4([w27, Sha256.s0(w28), w36, Sha256.s1(w41)]);
-    const w44 = Sha256.mod_add_4([w28, Sha256.s0(w29), w37, Sha256.s1(w42)]);
-    const w45 = Sha256.mod_add_4([w29, Sha256.s0(w30), w38, Sha256.s1(w43)]);
-    const w46 = Sha256.mod_add_4([w30, Sha256.s0(w31), w39, Sha256.s1(w44)]);
-    const w47 = Sha256.mod_add_4([w31, Sha256.s0(w32), w40, Sha256.s1(w45)]);
-    const w48 = Sha256.mod_add_4([w32, Sha256.s0(w33), w41, Sha256.s1(w46)]);
-    const w49 = Sha256.mod_add_4([w33, Sha256.s0(w34), w42, Sha256.s1(w47)]);
-    const w50 = Sha256.mod_add_4([w34, Sha256.s0(w35), w43, Sha256.s1(w48)]);
-    const w51 = Sha256.mod_add_4([w35, Sha256.s0(w36), w44, Sha256.s1(w49)]);
-    const w52 = Sha256.mod_add_4([w36, Sha256.s0(w37), w45, Sha256.s1(w50)]);
-    const w53 = Sha256.mod_add_4([w37, Sha256.s0(w38), w46, Sha256.s1(w51)]);
-    const w54 = Sha256.mod_add_4([w38, Sha256.s0(w39), w47, Sha256.s1(w52)]);
-    const w55 = Sha256.mod_add_4([w39, Sha256.s0(w40), w48, Sha256.s1(w53)]);
-    const w56 = Sha256.mod_add_4([w40, Sha256.s0(w41), w49, Sha256.s1(w54)]);
-    const w57 = Sha256.mod_add_4([w41, Sha256.s0(w42), w50, Sha256.s1(w55)]);
-    const w58 = Sha256.mod_add_4([w42, Sha256.s0(w43), w51, Sha256.s1(w56)]);
-    const w59 = Sha256.mod_add_4([w43, Sha256.s0(w44), w52, Sha256.s1(w57)]);
-    const w60 = Sha256.mod_add_4([w44, Sha256.s0(w45), w53, Sha256.s1(w58)]);
-    const w61 = Sha256.mod_add_4([w45, Sha256.s0(w46), w54, Sha256.s1(w59)]);
-    const w62 = Sha256.mod_add_4([w46, Sha256.s0(w47), w55, Sha256.s1(w60)]);
-    const w63 = Sha256.mod_add_4([w47, Sha256.s0(w48), w56, Sha256.s1(w61)]);
-
-    const w = [
-      w00, w01, w02, w03, w04, w05, w06, w07,
-      w08, w09, w10, w11, w12, w13, w14, w15,
-      w16, w17, w18, w19, w20, w21, w22, w23,
-      w24, w25, w26, w27, w28, w29, w30, w31,
-      w32, w33, w34, w35, w36, w37, w38, w39,
-      w40, w41, w42, w43, w44, w45, w46, w47,
-      w48, w49, w50, w51, w52, w53, w54, w55,
-      w56, w57, w58, w59, w60, w61, w62, w63
-    ];
-
-    // Circuit.asProver(() => {
-
-    //   for (let i = 0; i < w.length; i++) {
-    //     console.log('wi', i, w[i].toNumString());
-    //   }
-    // })
-
-    // const w = [
-    //   Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(2147483648), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0),
-    //   Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(0), Word.fromNumber(128),
-    //   Word.fromNumber(2147483648), Word.fromNumber(5242880), Word.fromNumber(2117632), Word.fromNumber(285226018), Word.fromNumber(2717911040), Word.fromNumber(479267501), Word.fromNumber(86558146), Word.fromNumber(604244376),
-    //   Word.fromNumber(2057832448), Word.fromNumber(2249615232), Word.fromNumber(371117093), Word.fromNumber(2702302800), Word.fromNumber(3693394220), Word.fromNumber(3656566431), Word.fromNumber(4020831841), Word.fromNumber(3344077814),
-    //   Word.fromNumber(2850564084), Word.fromNumber(1176995508), Word.fromNumber(57371836), Word.fromNumber(935737620), Word.fromNumber(1924951558), Word.fromNumber(2646558236), Word.fromNumber(3188273643), Word.fromNumber(662123519),
-    //   Word.fromNumber(132479735), Word.fromNumber(82976880), Word.fromNumber(587059131), Word.fromNumber(3564991523), Word.fromNumber(1831900348), Word.fromNumber(1280217504), Word.fromNumber(3247208456), Word.fromNumber(1606633922),
-    //   Word.fromNumber(3824489119), Word.fromNumber(3661145806), Word.fromNumber(2749372480), Word.fromNumber(95580149), Word.fromNumber(3373755984), Word.fromNumber(1712908532), Word.fromNumber(2935780836), Word.fromNumber(624436453),
-    //   Word.fromNumber(4279189747), Word.fromNumber(3249421241), Word.fromNumber(1899504857), Word.fromNumber(3364093649), Word.fromNumber(3618550374), Word.fromNumber(2474421444), Word.fromNumber(3544608726), Word.fromNumber(2312060986)
-    // ];
+    const w: Word[] = [];
+    for (let i = 0; i < 64; i++) {
+      if (i < 16) {
+        w.push(chuck[i])
+      } else {
+        w.push(Sha256.mod_add_4([w[i -16], Sha256.s0(w[i -15]), w[i -7], Sha256.s1(w[i -2])]));
+      }
+    }
 
     return Sha256.compression(hprev, w);
 
@@ -492,25 +459,10 @@ export default class Sha256 extends Circuit {
 async function main() {
 
   console.log('main ......')
-  const preimage = new Preimage([Word.fromNumber(2147483648),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(2147483648),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(0),
-  Word.fromNumber(128)])
+  const chunk = Chunk.fromBuffer256(Buffer.from(sha256('80000000000000000000000000000000'), 'hex'))
 
 
-  const hashbuf = Buffer.from(sha256("80000000000000000000000000000000"), 'hex');
+  const hashbuf = Buffer.from(hash256("80000000000000000000000000000000"), 'hex');
 
   console.log(hashbuf.toString('hex'))
   const hash = Hash.fromBuffer(hashbuf)
@@ -527,7 +479,7 @@ async function main() {
   // console.log(`Sha256.main() creates ${info.rows} contraints`);
 
   const kp = Sha256.generateKeypair();
-  const pi = Sha256.prove([preimage], [hash], kp);
+  const pi = Sha256.prove([chunk], [hash], kp);
   console.log('proof', pi);
   const success = Sha256.verify([hash], kp.verificationKey(), pi)
   console.log('verify', success);
@@ -539,7 +491,7 @@ async function main() {
 async function recursion_main() {
 
   console.log('recursion_main ......')
-  const preimage = new Preimage([Word.fromNumber(2147483648),
+  const preimage = new Chunk([Word.fromNumber(2147483648),
     Word.fromNumber(0),
     Word.fromNumber(0),
     Word.fromNumber(0),
@@ -562,19 +514,19 @@ async function recursion_main() {
   
     methods: {
       baseCase: {
-        privateInputs: [Preimage],
+        privateInputs: [Chunk],
   
-        method(publicInput: Hash, preimage: Preimage) {
-          publicInput.assertEquals(Sha256.sha256(preimage));
+        method(publicInput: Hash, chunk: Chunk) {
+          publicInput.assertEquals(Sha256.sha256([chunk]));
         },
       },
   
       inductiveCase: {
-        privateInputs: [Preimage, SelfProof],
+        privateInputs: [Chunk, SelfProof],
   
-        method(publicInput: Hash, preimage: Preimage, earlierProof: SelfProof<Hash>) {
+        method(publicInput: Hash, chunk: Chunk, earlierProof: SelfProof<Hash>) {
           earlierProof.verify();
-          publicInput.assertEquals(Sha256.sha256(preimage));
+          publicInput.assertEquals(Sha256.sha256([chunk]));
         },
       },
     },
@@ -602,7 +554,7 @@ async function recursion_main() {
   console.log('ok?', ok);
   
   console.log('proving step 1...');
-  const hash1 = Sha256.sha256(preimage);
+  const hash1 = Sha256.sha256([preimage]);
   
   console.log('hash1', hash1.toString());
   proof = await Sha256dProgram.inductiveCase(hash1, preimage, proof);
