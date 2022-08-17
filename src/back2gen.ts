@@ -115,8 +115,8 @@ async function main() {
             let tx = [...txPrefix, ...prevTxId.value, ...txPostfix];
             let txId = hash2TxId(tx);
             prevProof = await TracebleCoin.transfer(txId, new RawTxPrefix(txPrefix), new RawTxPostfix(txPostfix), prevProof);
-            prevProof.verify();
-            console.log(`Tx_${i} passed verify, txId: ${txId.toString()}, prevTxId: ${prevTxId.toString()} `, new Date())
+            let ok = await TracebleCoin.verify(prevProof);
+            console.log(`Tx_${i} ${ok ? "passed" : "failed"} verification, txId: ${txId.toString()}, prevTxId: ${prevTxId.toString()} `, new Date())
             prevTxId = txId;
         }
 
