@@ -81,7 +81,10 @@ async function main() {
   const hash1 = Poseidon.hash([Poseidon.hash([preimage])]);
   
   console.log('hash1', BigInt(hash1.toString()).toString(16));
-  proof = await PoseidondProgram.inductiveCase(hash1, proof);
+
+  let earlyProof = MyProof.fromJSON(newProof);
+
+  proof = await PoseidondProgram.inductiveCase(hash1, earlyProof);
   console.log('verify alternative...');
   ok = await PoseidondProgram.verify(proof);
   console.log('ok (alternative)?', ok);
