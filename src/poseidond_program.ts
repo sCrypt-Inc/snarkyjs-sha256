@@ -67,9 +67,14 @@ async function main() {
   console.log('proving base case...');
   let proof = await PoseidondProgram.baseCase(preimage);
   //proof = testJsonRoundtrip(proof);
-  
-  console.log('verify...');
-  let ok = await verify(proof, verificationKey);
+
+  // Serialization
+  let strProof = JSON.stringify(proof.toJSON());
+
+  // Deserialization
+  let newProof = JSON.parse(strProof);
+
+  let ok = await verify(MyProof.fromJSON(newProof), verificationKey);
   console.log('ok?', ok);
   
   console.log('proving step 1...');
