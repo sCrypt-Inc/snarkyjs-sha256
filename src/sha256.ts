@@ -8,7 +8,7 @@ import {
   shutdown,
   arrayProp,
   CircuitValue,
-  ZkProgram,
+  Experimental,
   SelfProof,
   verify
 } from 'snarkyjs';
@@ -39,7 +39,7 @@ class Word extends CircuitValue {
   }
 
   toNumString(): string {
-    return Field.ofBits(this.value).toString();
+    return Field.fromBits(this.value).toString();
   }
 
   static fromNumber(n: number): Word {
@@ -145,8 +145,8 @@ class Word extends CircuitValue {
   }
 
   static add(a: Word, b: Word): Word {
-    const a_ = Field.ofBits(a.value)
-    const b_ = Field.ofBits(b.value)
+    const a_ = Field.fromBits(a.value)
+    const b_ = Field.fromBits(b.value)
     const sum = a_.add(b_)
     const ret = new Word(sum.toBits(33).slice(0, 32))
     return ret;
@@ -251,7 +251,7 @@ export class Chunk extends CircuitValue {
   static fromBuffer256(buffer: Buffer): Chunk {
 
     if(buffer.length != 32) {
-      throw new Error("expected buffer length = 32")
+      throw new Error("expected buffer length = 32, got " + buffer.length)
     }
 
     return new Chunk([Word.fromNumber(buffer.readUInt32BE(0)),
@@ -377,7 +377,7 @@ export class Hash extends CircuitValue {
 
     for (let i = 0; i < 32; i++) {
       const t = this.value.slice(i * 8, i * 8 + 8).reverse();
-      r.push(Number(Field.ofBits(t).toBigInt()));
+      r.push(Number(Field.fromBits(t).toBigInt()));
     }
 
     return Buffer.from(r).toString('hex')
@@ -387,7 +387,7 @@ export class Hash extends CircuitValue {
 export default class Sha256 extends Circuit {
   @circuitMain
   static main(preimage: Chunk, @public_ hash: Hash) {
-    hash.assertEquals(Sha256.sha256([preimage]));
+    hash.assertEquals(Sha256.hash256([preimage]));
   }
   static sha256Impl(preimage: Chunk[]): Word[] {
     console.log('sha256Impl...')
@@ -496,9 +496,9 @@ export default class Sha256 extends Circuit {
 
   static mod_add_4(a: Word[]): Word {
 
-    let acc = Field.ofBits(a[0].value);
+    let acc = Field.fromBits(a[0].value);
     for (let i = 1; i < 4; i++) {
-      acc = acc.add(Field.ofBits(a[i].value));
+      acc = acc.add(Field.fromBits(a[i].value));
     }
 
     return new Word(acc.toBits(34).slice(0, 32));
@@ -506,9 +506,9 @@ export default class Sha256 extends Circuit {
 
   static mod_add_5(a: Word[]): Word {
 
-    let acc = Field.ofBits(a[0].value);
+    let acc = Field.fromBits(a[0].value);
     for (let i = 1; i < 5; i++) {
-      acc = acc.add(Field.ofBits(a[i].value));
+      acc = acc.add(Field.fromBits(a[i].value));
     }
 
     return new Word(acc.toBits(35).slice(0, 32));
@@ -521,7 +521,7 @@ export default class Sha256 extends Circuit {
 async function main() {
 
   console.log('main ......')
-  const chunk = Chunk.fromBuffer256(Buffer.from(sha256('80000000000000000000000000000000'), 'hex'))
+  const chunk = Chunk.fromBuffer128(Buffer.from('80000000000000000000000000000000', 'hex'))
 
 
   const hashbuf = Buffer.from(hash256("80000000000000000000000000000000"), 'hex');
@@ -571,7 +571,7 @@ async function recursion_main() {
     Word.fromNumber(128)])
 
     
-  let Sha256dProgram = ZkProgram({
+  let Sha256dProgram = Experimental.ZkProgram({
     publicInput: Hash,
   
     methods: {
@@ -594,7 +594,7 @@ async function recursion_main() {
     },
   });
 
-  let MyProof = ZkProgram.Proof(Sha256dProgram);
+  let MyProof = Experimental.ZkProgram.Proof(Sha256dProgram);
 
   console.log('program digest', Sha256dProgram.digest());
   

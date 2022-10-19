@@ -4,10 +4,12 @@ import {
   Circuit,
   circuitMain,
   public_,
-  SelfProof, ZkProgram, verify,
+  SelfProof, verify,
+  Experimental,
   isReady,
   shutdown
 } from 'snarkyjs';
+let {ZkProgram} = Experimental;
 
 
 //console.log('Main verify ok?', ok);

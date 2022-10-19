@@ -1,5 +1,5 @@
 import {
-    SelfProof, Field, ZkProgram, CircuitValue,
+    SelfProof, Field, Experimental, CircuitValue,
     isReady, shutdown, Bool, arrayProp, Poseidon
 } from 'snarkyjs';
 
@@ -47,7 +47,7 @@ function hex2Bits(hex: string): Bool[] {
 function bits2Hex(bits: Bool[]): string {
     return chunk(bits, 4)
         .map(cbits =>
-            HEX_CHARS.at(Number(Field.ofBits(cbits).toBigInt()))
+            HEX_CHARS.at(Number(Field.fromBits(cbits).toBigInt()))
         )
         .join('')
 }
@@ -59,7 +59,7 @@ function chunk(arr: Array<any>, size: number) {
 }
 
 function hash2TxId(bits: Bool[]): TxId {
-    let hash = Poseidon.hash(chunk(bits, 255).map(cbits => Field.ofBits(cbits))).toBits();
+    let hash = Poseidon.hash(chunk(bits, 255).map(cbits => Field.fromBits(cbits))).toBits();
     hash.push(new Bool(false)); // padding hash to 256 bits
     if (hash.length !== 256) throw Error('TxId should be length of 256');
     return new TxId(hash);
@@ -68,7 +68,7 @@ function hash2TxId(bits: Bool[]): TxId {
 // a dummy genesis tx id, should be modified in production env
 const GENESIS_TX_ID = new TxId(hex2Bits("7967a5185e907a25225574544c31f7b059c1a191d65b53dcc1554d339c4f9efc"));
 
-let TracebleCoin = ZkProgram({
+let TracebleCoin = Experimental.ZkProgram({
     publicInput: TxId,
 
     methods: {
